@@ -1,0 +1,183 @@
+import { useEffect, useRef, useState } from 'react';
+import { priceWheel, formatMultiplier, type Paint, type Tier } from '../lib/game';
+
+const TIER_COLORS: Record<Tier, { fill: string; text: string }> = {
+  0: { fill: 'var(--green)', text: '#ffffff' },
+  1: { fill: 'var(--gold)', text: '#141414' },
+  2: { fill: 'var(--red)', text: '#ffffff' },
+};
+
+const LIVERY_SCHEMES: Record<string, Record<Tier, { fill: string; text: string }>> = {
+  classic: TIER_COLORS,
+  midway: {
+    0: { fill: '#2f6bff', text: '#ffffff' },
+    1: { fill: '#ffd166', text: '#141414' },
+    2: { fill: '#1d1f1e', text: '#ffd166' },
+  },
+  mint: {
+    0: { fill: '#8fd6b4', text: '#141414' },
+    1: { fill: '#2f9e44', text: '#ffffff' },
+    2: { fill: '#116530', text: '#c8ffd9' },
+  },
+  twilight: {
+    0: { fill: '#b99cff', text: '#141414' },
+    1: { fill: '#7a4dff', text: '#ffffff' },
+    2: { fill: '#3d1d8f', text: '#ffd7f0' },
+  },
+};
+
+export function wheelColors(livery: string): Record<Tier, { fill: string; text: string }> {
+  return LIVERY_SCHEMES[livery] ?? TIER_COLORS;
+}
+
+type SpinPhase = 'idle' | 'spinning' | 'done';
+
+export function Wheel({
+  paint,
+  onPaintSegment,
+  spinNonce,
+  resultSegment,
+  livery,
+  interactive,
+  onTickSound,
+  onLand,
+}: {
+  paint: Paint;
+  onPaintSegment?: (index: number) => void;
+  /** increments every spin start */
+  spinNonce: number;
+  /** segment to land on (set when spin starts) */
+  resultSegment: number | null;
+  livery: string;
+  interactive: boolean;
+  onTickSound?: (speed01: number) => void;
+  onLand?: () => void;
+}) {
+  const [rotation, setRotation] = useState(0);
+  const [phase, setPhase] = useState<SpinPhase>('idle');
+  const rafRef = useRef(0);
+  const lastTickRef = useRef(0);
+  const animRef = useRef({ from: 0, to: 0, start: 0, dur: 0 });
+
+  const colors = wheelColors(livery);
+  const prices = priceWheel(paint);
+  const multFor = (t: Tier) => (t === 0 ? prices.safe : t === 1 ? prices.mid : prices.risky);
+  const N = paint.segmentCount;
+
+  // spin animation whenever spinNonce changes (and result is known)
+  useEffect(() => {
+    if (spinNonce === 0 || resultSegment === null) return;
+    const segAngle = 360 / N;
+    // pointer sits at 12 o'clock; target wedge center must land there.
+    const targetCenter = resultSegment * segAngle + segAngle / 2;
+    const targetMod = (360 - targetCenter) % 360;
+    const current = rotation;
+    const currentMod = ((current % 360) + 360) % 360;
+    let delta = targetMod - currentMod;
+    while (delta < 0) delta += 360;
+    const from = current;
+    const to = current + 360 * 5 + delta; // 5 full laps + landing
+    const dur = 3400 + Math.random() * 500;
+
+    animRef.current = { from, to, start: performance.now(), dur };
+    setPhase('spinning');
+
+    const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4);
+
+    const step = (now: number) => {
+      const a = animRef.current;
+      const t = Math.min(1, (now - a.start) / a.dur);
+      const angle = a.from + (a.to - a.from) * easeOutQuart(t);
+      setRotation(angle);
+
+      // ratchet ticks, pitch scaling with speed
+      const speed01 = 1 - t;
+      if (now - lastTickRef.current > 30 + 240 * (1 - speed01)) {
+        lastTickRef.current = now;
+        onTickSound?.(speed01);
+      }
+
+      if (t < 1) {
+        rafRef.current = requestAnimationFrame(step);
+      } else {
+        setPhase('done');
+        onLand?.();
+      }
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(rafRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spinNonce]);
+
+  const segAngle = 360 / N;
+  const cx = 200;
+  const cy = 200;
+  const R = 186;
+  const rim = 14;
+
+  const wedgePath = (i: number): string => {
+    const a0 = ((i * segAngle - 90) * Math.PI) / 180;
+    const a1 = (((i + 1) * segAngle - 90) * Math.PI) / 180;
+    const x0 = cx + R * Math.cos(a0);
+    const y0 = cy + R * Math.sin(a0);
+    const x1 = cx + R * Math.cos(a1);
+    const y1 = cy + R * Math.sin(a1);
+    return `M ${cx} ${cy} L ${x0.toFixed(2)} ${y0.toFixed(2)} A ${R} ${R} 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)} Z`;
+  };
+
+  const labelPos = (i: number): { x: number; y: number } => {
+    const mid = ((i + 0.5) * segAngle - 90) * (Math.PI / 180);
+    const rr = R * 0.72;
+    return { x: cx + rr * Math.cos(mid), y: cy + rr * Math.sin(mid) };
+  };
+
+  return (
+    <div className={`wheel-wrap${phase === 'done' ? ' spun-shake' : ''}`}>
+      <svg className="wheel-svg" viewBox="0 0 400 400" aria-label="FAIRGROUND prize wheel">
+        {/* outer rim */}
+        <circle cx={cx} cy={cy} r={R + rim / 2} fill="#fffdf7" stroke="#141414" strokeWidth="5" />
+        <circle cx={cx} cy={cy} r={R + rim / 2 - 7} fill="none" stroke="var(--line)" strokeWidth="2" />
+
+        <g transform={`rotate(${rotation} ${cx} ${cy})`}>
+          {paint.tiers.map((t, i) => {
+            const pos = labelPos(i);
+            return (
+              <g
+                key={i}
+                onClick={interactive && onPaintSegment ? () => onPaintSegment(i) : undefined}
+                style={{ cursor: interactive ? 'pointer' : 'default' }}
+              >
+                <path d={wedgePath(i)} fill={colors[t].fill} stroke="#141414" strokeWidth="3" />
+                <text
+                  x={pos.x}
+                  y={pos.y}
+                  fill={colors[t].text}
+                  fontSize="15"
+                  fontWeight="700"
+                  fontFamily="var(--font-pixel)"
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  transform={`rotate(${(i + 0.5) * segAngle} ${pos.x} ${pos.y})`}
+                  style={{ pointerEvents: 'none' }}
+                >
+                  {formatMultiplier(multFor(t)).replace('×', '')}
+                </text>
+              </g>
+            );
+          })}
+          {/* hub */}
+          <circle cx={cx} cy={cy} r="34" fill="#fffdf7" stroke="#141414" strokeWidth="4" />
+          <circle cx={cx} cy={cy} r="10" fill="#141414" />
+        </g>
+
+        {/* static pointer hub cap */}
+        <circle cx={cx} cy={cy} r="5" fill="#e8442e" stroke="#141414" strokeWidth="2" />
+      </svg>
+
+      {/* pointer at 12 o'clock */}
+      <svg className="pointer" width="44" height="30" viewBox="0 0 44 30" aria-hidden>
+        <path d="M22 28 L4 4 Q22 10 40 4 Z" fill="#e8442e" stroke="#141414" strokeWidth="3" strokeLinejoin="round" />
+      </svg>
+    </div>
+  );
+}

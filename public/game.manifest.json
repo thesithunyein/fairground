@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "gameId": "FairgroundWheel",
+  "apiVersion": 1,
+  "defaultLocale": "en",
+  "locales": {
+    "en": {
+      "name": "FAIRGROUND",
+      "description": "The honest carnival — paint the payout tiers on a provably uniform wheel, spin once on VRF, and collect carnival prizes while the wheel stays fair. 96% RTP on every legal paint."
+    }
+  },
+  "presentation": {
+    "mode": "full-iframe",
+    "hostPanels": {
+      "openSession": false,
+      "history": false,
+      "status": false
+    }
+  },
+  "capabilities": {
+    "openSession": true,
+    "submitAction": false,
+    "forfeitExpiredSession": false,
+    "cancelStuckRandomness": false,
+    "resize": true
+  }
+}
