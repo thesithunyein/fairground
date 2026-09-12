@@ -546,6 +546,25 @@ body {
    ═══════════════════════════════════════════════════════════════════ */
 html, body { overflow-x: clip; } /* phones: never scroll sideways */
 
+/* the game is a pointer app — no double-tap-zoom hesitation on controls */
+.app, .spin-btn, .tier-pill, .chip, .icon-btn, .half-double, .livery-dot, .prize-cell { touch-action: manipulation; }
+
+/* keyboard focus ring, in the design language */
+.spin-btn:focus-visible, .tier-pill:focus-visible, .icon-btn:focus-visible,
+.half-double:focus-visible, .livery-dot:focus-visible, button:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}
+
+/* respect reduced-motion: keep the game, drop the theatrics */
+@media (prefers-reduced-motion: reduce) {
+  .spin-btn.attract, .spin-btn.attract { animation: none; }
+  .confetti { display: none; }
+  .paint-hint .hint-hand { animation: none; }
+  .wheel-wrap.spun-shake .wheel-svg { animation: none; }
+  .prize-toast { animation: none; }
+}
+
 @media (max-width: 640px) {
   .app { padding: 10px 10px 96px; } /* bottom padding clears the sticky bar */
 

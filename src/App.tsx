@@ -154,6 +154,7 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [err, setErr] = useState('');
   const roundRef = useRef<Round | null>(null);
+  const placingRef = useRef(false); // guards double-tap double-bet
   roundRef.current = round;
 
   const decimals = demo ? 6 : snapshot?.token?.decimals ?? 6;
@@ -312,39 +313,44 @@ export default function App() {
 
   async function placeBet() {
     setErr('');
-    if (round) return;
-    if (!legal) { setErr('Paint needs all three tiers (risky ≤ half the wheel).'); return; }
-    const wager = parseUnits(betInput, decimals);
-    if (wager <= 0n) { setErr('Enter a bet amount.'); return; }
-    if (wager > maxWager) { setErr(`Max bet right now: ${formatUnits(maxWager, decimals)} ${symbol}`); return; }
-    if (demo && wager > balance) { setErr('Not enough demo balance.'); return; }
+    if (placingRef.current || round) return; // placingRef: two rapid taps must not open two sessions
+    placingRef.current = true;
+    try {
+      if (!legal) { setErr('Paint needs all three tiers (risky ≤ half the wheel).'); return; }
+      const wager = parseUnits(betInput, decimals);
+      if (wager <= 0n) { setErr('Enter a bet amount.'); return; }
+      if (wager > maxWager) { setErr(`Max bet right now: ${formatUnits(maxWager, decimals)} ${symbol}`); return; }
+      if (demo && wager > balance) { setErr('Not enough demo balance.'); return; }
 
-    if (!hintDone) {
-      setHintDone(true);
-      try { localStorage.setItem('fg_hint_done', '1'); } catch { /* ignore */ }
-    }
+      if (!hintDone) {
+        setHintDone(true);
+        try { localStorage.setItem('fg_hint_done', '1'); } catch { /* ignore */ }
+      }
 
-    const gameData = encodeGameData(paint);
+      const gameData = encodeGameData(paint);
 
-    if (demo || !hostApi) {
+      if (demo || !hostApi) {
+        setRound({ wager, paint, pending: true });
+        setResult(null);
+        // let React paint the disabled button first
+        window.setTimeout(() => spinDemo(), 60);
+        return;
+      }
+
       setRound({ wager, paint, pending: true });
       setResult(null);
-      // let React paint the disabled button first
-      window.setTimeout(() => spinDemo(), 60);
-      return;
-    }
-
-    setRound({ wager, paint, pending: true });
-    setResult(null);
-    try {
-      const { sessionKey } = await hostApi.openSession({ wager: wager.toString(), gameData });
-      if (roundRef.current && roundRef.current.pending) {
-        setRound({ ...roundRef.current, sessionKey, pending: false });
-        setLcd('WAITING FOR VRF...');
+      try {
+        const { sessionKey } = await hostApi.openSession({ wager: wager.toString(), gameData });
+        if (roundRef.current && roundRef.current.pending) {
+          setRound({ ...roundRef.current, sessionKey, pending: false });
+          setLcd('WAITING FOR VRF...');
+        }
+      } catch (e) {
+        setRound(null);
+        setErr(friendlyBetError(e, symbol));
       }
-    } catch (e) {
-      setRound(null);
-      setErr(friendlyBetError(e, symbol));
+    } finally {
+      placingRef.current = false;
     }
   }
 
