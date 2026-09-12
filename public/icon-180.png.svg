@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
-  <!-- FAIRGROUND brand mark — round-cornered tile + prize wheel -->
+  <!-- FAIRGROUND brand mark: round-cornered tile + prize wheel -->
   <rect x="6" y="6" width="168" height="168" rx="46" fill="#e8442e" stroke="#141414" stroke-width="10"/>
   <circle cx="90" cy="90" r="60" fill="#f7f4ec" stroke="#141414" stroke-width="8"/>
   <!-- wedges: safe (cream) / mid (gold) / risky (blue) on the red tile -->
