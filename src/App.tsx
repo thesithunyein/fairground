@@ -263,6 +263,13 @@ export default function App() {
   const roundRef = useRef<Round | null>(null);
   const placingRef = useRef(false); // guards double-tap double-bet
   roundRef.current = round;
+  // Late-bound settle. `spinDemo` is memoised, and on the very first render the
+  // bridge is still 'pending' so its captured `settle` closes over demo=false:
+  // the opening spin after a reload would then skip the demo bank update and
+  // reuse a stale collection. Routing every resolve through this ref means the
+  // landing always runs against the newest render's state.
+  const settleRef = useRef<(segment: number, outcome: ReturnType<typeof outcomeFromRandomness>) => void>(() => {});
+  settleRef.current = settle;
 
   const decimals = demo ? 6 : snapshot?.token?.decimals ?? 6;
   const symbol = demo ? 'chUSD' : snapshot?.token?.symbol ?? 'chUSD';
@@ -325,7 +332,7 @@ export default function App() {
       setPendingSegment(outcome.segment);
       setSpinNonce(n => n + 1);
       pendingResolveRef.current = () => {
-        settle(outcome.segment, outcome);
+        settleRef.current(outcome.segment, outcome);
         // The host holds the win back from its balance display until the
         // result has been shown, and it tracks the round by the bare
         // `sessionId`. `sessionKey` is "{chainId}:{sessionId}", so passing it
@@ -453,18 +460,18 @@ export default function App() {
 
   const pendingResolveRef = useRef<(() => void) | null>(null);
 
-  const spinDemo = useCallback(() => {
-    const r = roundRef.current;
-    if (!r) return;
+  // The round is passed in rather than read back from the ref: this runs on a
+  // timer, and if React has not committed the setRound yet the ref is still
+  // null, which used to leave the booth on SPINNING… with SPIN disabled forever.
+  const spinDemo = useCallback((r: Round) => {
     const seed = demoSeed();
     const rnd = demoRandomness(seed);
     const outcome = outcomeFromRandomness(r.wager, r.paint, rnd);
     setPendingSegment(outcome.segment);
     setSpinNonce(n => n + 1);
     // landing callback resolves the round
-    pendingResolveRef.current = () => settle(outcome.segment, outcome);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collection]);
+    pendingResolveRef.current = () => settleRef.current(outcome.segment, outcome);
+  }, []);
 
   const onWheelLand = useCallback(() => {
     const resolve = pendingResolveRef.current;
@@ -488,20 +495,32 @@ export default function App() {
 
       const gameData = encodeGameData(paint);
 
+      const rt: Round = { wager, paint, pending: true };
+      setRound(rt);
+      setResult(null);
+      // hand the round to the land callback straight away: the timer below can
+      // otherwise fire before React has committed the state
+      roundRef.current = rt;
+
       if (demo || !hostApi) {
-        setRound({ wager, paint, pending: true });
-        setResult(null);
         // let React paint the disabled button first
-        window.setTimeout(() => spinDemo(), 60);
+        window.setTimeout(() => spinDemo(rt), 60);
+        // A demo spin resolves on its own animation frame, so nothing should
+        // ever leave the round open. If it does (a dropped frame, a tab
+        // backgrounded mid-spin), free the booth rather than wedge SPIN.
+        window.setTimeout(() => {
+          if (roundRef.current !== rt) return;
+          setRound(null);
+          setPendingSegment(null);
+          setErr('That spin stalled. Tap SPIN again.');
+        }, 9000);
         return;
       }
 
-      setRound({ wager, paint, pending: true });
-      setResult(null);
       try {
         const { sessionKey } = await hostApi.openSession({ wager: wager.toString(), gameData });
-        if (roundRef.current && roundRef.current.pending) {
-          setRound({ ...roundRef.current, sessionKey, pending: false });
+        if (roundRef.current === rt) {
+          setRound({ ...rt, sessionKey, pending: false });
           setLcd('WAITING FOR VRF...');
         }
       } catch (e) {
