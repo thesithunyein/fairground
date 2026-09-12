@@ -231,6 +231,10 @@ export default function App() {
     const row = snapshot.sessions.items.find(s => s.sessionKey === round.sessionKey);
     if (!row || !isTerminal(row.phase)) return;
     if (row.phase === PHASE_CANCELLED || row.phase === PHASE_FORFEITED) {
+      // A cancel or forfeit moves balance back to the player, and the host
+      // keeps that credit withheld until we reveal. Harmless no-op if the
+      // host has nothing held for this session.
+      void hostApi?.revealOutcome({ sessionId: row.sessionId }).catch(() => {});
       setRound(null);
       setPendingSegment(null);
       setLcd('ROUND CANCELLED');
@@ -246,7 +250,12 @@ export default function App() {
       setSpinNonce(n => n + 1);
       pendingResolveRef.current = () => {
         settle(outcome.segment, outcome);
-        void hostApi?.revealOutcome({ sessionId: round.sessionKey! }).catch(() => {});
+        // The host holds the win back from its balance display until the
+        // result has been shown, and it tracks the round by the bare
+        // `sessionId`. `sessionKey` is "{chainId}:{sessionId}", so passing it
+        // here matches no tracked round and the balance never credits while
+        // the game is open. The row is the authoritative source for both.
+        void hostApi?.revealOutcome({ sessionId: row.sessionId }).catch(() => {});
       };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
