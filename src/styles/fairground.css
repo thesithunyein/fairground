@@ -542,18 +542,31 @@ body {
 .stats-strip .hot b { color: var(--red-deep); }
 
 /* ── first-visit paint hint ──────────────────────────────────────── */
-/* ── how to play (first visit, and the header "?" button) ──────────── */
-.howto {
-  margin-top: 10px;
-  border: 2px solid var(--ink);
-  border-radius: 12px;
-  background: var(--paper-blue);
-  box-shadow: 3px 3px 0 var(--ink);
-  padding: 11px 13px;
-  display: flex; flex-direction: column; gap: 9px;
-  animation: howtoIn 0.3s cubic-bezier(0.2, 1.3, 0.3, 1);
+/* ── how to play: a centered modal, on a first visit and from header "?" ──
+   Centered rather than in the flow on purpose: instructions nobody scrolls
+   to are instructions nobody reads. */
+.howto-backdrop {
+  position: fixed; inset: 0; z-index: 120;
+  display: grid; place-items: center;
+  padding: 16px;
+  background: rgba(20, 20, 20, 0.55);
+  animation: howtoFade 0.18s ease;
 }
-@keyframes howtoIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes howtoFade { from { opacity: 0; } to { opacity: 1; } }
+.howto {
+  width: min(560px, 100%);
+  max-height: min(88vh, 720px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: var(--paper-blue);
+  box-shadow: 5px 5px 0 var(--ink), 0 18px 50px rgba(20, 20, 20, 0.35);
+  padding: 15px 17px;
+  display: flex; flex-direction: column; gap: 10px;
+  animation: howtoIn 0.28s cubic-bezier(0.2, 1.3, 0.3, 1);
+}
+@keyframes howtoIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
 .howto-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .howto-head h3 {
   margin: 0;
@@ -561,7 +574,7 @@ body {
   font-size: 11px; letter-spacing: 0.08em;
 }
 .howto-x {
-  width: 22px; height: 22px; flex: 0 0 auto;
+  width: 26px; height: 26px; flex: 0 0 auto;
   display: grid; place-items: center;
   border: 2px solid var(--ink); border-radius: 6px;
   background: var(--card); box-shadow: 2px 2px 0 var(--ink);
@@ -571,12 +584,12 @@ body {
 .howto-x:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
 .howto-steps { display: flex; flex-direction: column; gap: 8px; }
 .howto-step {
-  display: flex; gap: 9px; align-items: flex-start;
-  font-size: 11.5px; line-height: 1.4; color: var(--ink);
+  display: flex; gap: 10px; align-items: flex-start;
+  font-size: 12.5px; line-height: 1.45; color: var(--ink);
 }
 .howto-step b { letter-spacing: 0.03em; }
 .howto-num {
-  flex: 0 0 auto; width: 21px; height: 21px;
+  flex: 0 0 auto; width: 23px; height: 23px; margin-top: 1px;
   display: grid; place-items: center;
   border: 2px solid var(--ink); border-radius: 7px;
   font-family: var(--font-pixel); font-size: 9px;
@@ -586,22 +599,23 @@ body {
 .howto-step.collect .howto-num { background: var(--paper-green); }
 .howto-foot {
   border-top: 2px dashed var(--line);
-  padding-top: 8px;
-  font-size: 10.5px; line-height: 1.40;
+  padding-top: 9px;
+  font-size: 11.5px; line-height: 1.45;
   color: var(--ink-soft);
 }
 .howto-foot b { color: var(--ink); }
 .howto-ok {
   align-self: flex-start;
-  font-family: var(--font-pixel); font-size: 9px;
-  border: 2px solid var(--ink); border-radius: 6px;
-  background: var(--gold); padding: 3px 10px;
+  font-family: var(--font-pixel); font-size: 10px;
+  border: 2px solid var(--ink); border-radius: 7px;
+  background: var(--gold); padding: 6px 14px;
   box-shadow: 2px 2px 0 var(--ink);
   color: var(--ink); cursor: pointer;
 }
 .howto-ok:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
 @media (max-width: 480px) {
-  .howto-step { font-size: 11px; }
+  .howto-backdrop { padding: 10px; }
+  .howto { padding: 13px 14px; max-height: 90vh; }
 }
 
 /* ── legendary/big-win confetti ──────────────────────────────────── */
@@ -654,6 +668,7 @@ html, body { overflow-x: clip; } /* phones: never scroll sideways */
   .paint-hint .hint-hand { animation: none; }
   .wheel-wrap.spun-shake .wheel-svg { animation: none; }
   .prize-toast { animation: none; }
+  .howto-backdrop, .howto { animation: none; }
 }
 
 @media (max-width: 640px) {

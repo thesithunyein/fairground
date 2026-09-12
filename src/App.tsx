@@ -181,12 +181,9 @@ export default function App() {
   const [balance, setBalance] = useState(DEMO_BALANCE_START);
   const [lcd, setLcd] = useState('FAIRGROUND v1.0');
   const [stats, setStats] = useState<Stats>(() => loadStats());
-  const [hintDone, setHintDone] = useState(() => {
-    try { return localStorage.getItem('fg_hint_done') === '1'; } catch { return true; }
-  });
-  // The "how to play" card. Open on a first visit, dismissible, and reopenable
-  // at any time from the header "?" button, so newcomers get walked through it
-  // while returning players keep a clean booth.
+  // The "how to play" modal. Open on a first visit, dismissible, and reopenable
+  // at any time from the header "?" button, so newcomers get walked through the
+  // loop while returning players keep a clean booth.
   const [howOpen, setHowOpen] = useState(() => {
     try { return localStorage.getItem('fg_hint_done') !== '1'; } catch { return false; }
   });
@@ -453,17 +450,23 @@ export default function App() {
 
   function dismissHow() {
     setHowOpen(false);
-    setHintDone(true);
     try { localStorage.setItem('fg_hint_done', '1'); } catch { /* ignore */ }
   }
 
-  // First visit: the card steps aside on its own once there has been time to
-  // read it. A reopen from the header stays until it is closed by hand.
+  // The instructions are a centered modal now, so they stay until the player
+  // closes them: no timer racing a slow reader. Escape closes, and the page
+  // behind the backdrop is held still while it is open.
   useEffect(() => {
-    if (!howOpen || hintDone) return;
-    const t = window.setTimeout(() => dismissHow(), 14000);
-    return () => window.clearTimeout(t);
-  }, [howOpen, hintDone]);
+    if (!howOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') dismissHow(); };
+    window.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [howOpen]);
 
   function shareWheel() {
     try { void navigator.clipboard.writeText(window.location.href); } catch { /* ignore */ }
@@ -559,46 +562,6 @@ export default function App() {
               <span className={stats.streak >= 3 ? 'hot' : ''}><b>{stats.streak}</b> streak</span>
               <span>best <b>{stats.bestWin}</b></span>
               <span>day <b>{stats.dailyStreak}</b> 🔥</span>
-            </div>
-          )}
-
-          {howOpen && (
-            <div className="howto" role="note" aria-label="how to play">
-              <div className="howto-head">
-                <h3>HOW TO PLAY</h3>
-                <button className="howto-x" type="button" onClick={dismissHow} aria-label="close how to play">✕</button>
-              </div>
-
-              <div className="howto-steps">
-                <div className="howto-step paint">
-                  <span className="howto-num">1</span>
-                  <span>
-                    <b>PAINT A SLICE.</b> Tap any slice to make it Safe, Mid or Risky. The multiplier on each
-                    slice moves with it, so you are setting the paytable. The odds never change.
-                  </span>
-                </div>
-                <div className="howto-step spin">
-                  <span className="howto-num">2</span>
-                  <span>
-                    <b>SPIN.</b> One VRF word picks the slice with rejection sampling, so every slice is exactly
-                    as likely as every other one. Nobody can steer it, us included.
-                  </span>
-                </div>
-                <div className="howto-step collect">
-                  <span className="howto-num">3</span>
-                  <span>
-                    <b>COLLECT.</b> Every spin also drops a carnival prize. Fill all six of a rarity to unlock a
-                    new booth livery.
-                  </span>
-                </div>
-              </div>
-
-              <div className="howto-foot">
-                <b>RTP stays 96% for every legal paint.</b> Paint it gentle or paint it wild: the maths is
-                identical every time. The declared maths and the verifier that proves it live in the repo.
-              </div>
-
-              <button className="howto-ok" type="button" onClick={dismissHow}>GOT IT</button>
             </div>
           )}
         </section>
@@ -706,6 +669,57 @@ export default function App() {
         <span>Provably fair: exactly-uniform wheel · VRF randomness · paytable recomputed on-chain from YOUR paint</span>
         <span className="stamp">DECLARED RTP 96% · HOUSE EDGE 4%</span>
       </footer>
+
+      {/* How to play, centered over the booth. A newcomer should not have to
+          scroll to find out what the game is, so this is a modal on arrival
+          and from the header "?" button. Backdrop click and Escape close it. */}
+      {howOpen && (
+        <div className="howto-backdrop" onClick={dismissHow}>
+          <div
+            className="howto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="howto-title"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="howto-head">
+              <h3 id="howto-title">HOW TO PLAY</h3>
+              <button className="howto-x" type="button" onClick={dismissHow} aria-label="close how to play" autoFocus>✕</button>
+            </div>
+
+            <div className="howto-steps">
+              <div className="howto-step paint">
+                <span className="howto-num">1</span>
+                <span>
+                  <b>PAINT A SLICE.</b> Tap any slice to make it Safe, Mid or Risky. The multiplier on each
+                  slice moves with it, so you are setting the paytable. The odds never change.
+                </span>
+              </div>
+              <div className="howto-step spin">
+                <span className="howto-num">2</span>
+                <span>
+                  <b>SPIN.</b> One VRF word picks the slice with rejection sampling, so every slice is exactly
+                  as likely as every other one. Nobody can steer it, us included.
+                </span>
+              </div>
+              <div className="howto-step collect">
+                <span className="howto-num">3</span>
+                <span>
+                  <b>COLLECT.</b> Every spin also drops a carnival prize. Fill all six of a rarity to unlock a
+                  new booth livery.
+                </span>
+              </div>
+            </div>
+
+            <div className="howto-foot">
+              <b>RTP stays 96% for every legal paint.</b> Paint it gentle or paint it wild: the maths is
+              identical every time. The declared maths and the verifier that proves it live in the repo.
+            </div>
+
+            <button className="howto-ok" type="button" onClick={dismissHow}>GOT IT</button>
+          </div>
+        </div>
+      )}
 
       {confetti > 0 && <ConfettiBurst key={confetti} />}
 
