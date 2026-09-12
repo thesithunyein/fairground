@@ -28,6 +28,9 @@ import {
 import * as sfx from './lib/sound';
 
 const DEMO_BALANCE_START = 1000_000000n; // 1000.00 (6 decimals)
+// capture mode: ?clean=1 hides the demo ticket stamp while recording promo footage
+// (cosmetic only — demo play itself is unchanged, and the normal page keeps the stamp)
+const CLEAN_MODE = new URLSearchParams(window.location.search).has('clean');
 const PHASE_WAITING_RANDOMNESS = 2;
 const PHASE_SETTLED = 3;
 const PHASE_FORFEITED = 4;
@@ -452,7 +455,7 @@ export default function App() {
 
   return (
     <div className="app">
-      {demo && (
+      {demo && !CLEAN_MODE && (
         <div className="overlay-badge" title="Free-play demo — the real game runs inside chain.wtf with your vault balance">
           <span className="tick-dot" />
           DEMO TICKET · FREE PLAY
