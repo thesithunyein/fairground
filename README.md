@@ -1,6 +1,12 @@
 # 🎡 FAIRGROUND — the honest carnival
 
+<p align="center">
+  <img src="public/icon-180.png.svg" width="140" alt="FAIRGROUND — prize wheel brand mark" />
+</p>
+
 > **Paint your prizes. The wheel stays fair.**
+
+**→ Play: https://fairground.sithunyein.com**
 
 A Chain Jam Vol. 1 entry ([jam.chain.wtf](https://jam.chain.wtf)). FAIRGROUND is a
 carnival prize wheel where the *probabilities are never negotiable* — one VRF word,

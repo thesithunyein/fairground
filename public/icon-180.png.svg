@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
+  <!-- FAIRGROUND brand mark — round-cornered tile + prize wheel -->
+  <rect x="6" y="6" width="168" height="168" rx="46" fill="#e8442e" stroke="#141414" stroke-width="10"/>
+  <circle cx="90" cy="90" r="60" fill="#f7f4ec" stroke="#141414" stroke-width="8"/>
+  <!-- wedges: safe (cream) / mid (gold) / risky (blue) on the red tile -->
+  <path d="M90 90 L90 32 A58 58 0 0 1 138 59 Z" fill="#f7f4ec" stroke="#141414" stroke-width="5"/>
+  <path d="M90 90 L138 59 A58 58 0 0 1 138 121 Z" fill="#f5b301" stroke="#141414" stroke-width="5"/>
+  <path d="M90 90 L138 121 A58 58 0 0 1 90 148 Z" fill="#2f6bff" stroke="#141414" stroke-width="5"/>
+  <circle cx="90" cy="90" r="15" fill="#141414"/>
+  <circle cx="90" cy="90" r="5" fill="#e8442e"/>
+</svg>
