@@ -257,7 +257,7 @@ export default function App() {
   const wagerPreview = (() => {
     const w = parseUnits(betInput, decimals);
     if (w <= 0n) return null;
-    const riskyWin = (w * prices.risky) / 10n ** BigInt(decimals);
+    const riskyWin = (w * prices.risky) / 10n ** 18n; // prices are WAD-scaled
     return `${formatUnits(w, decimals)} → up to ${formatUnits(riskyWin, decimals)} ${symbol} on risky`;
   })();
 
