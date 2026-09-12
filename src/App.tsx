@@ -184,6 +184,12 @@ export default function App() {
   const [hintDone, setHintDone] = useState(() => {
     try { return localStorage.getItem('fg_hint_done') === '1'; } catch { return true; }
   });
+  // The "how to play" card. Open on a first visit, dismissible, and reopenable
+  // at any time from the header "?" button, so newcomers get walked through it
+  // while returning players keep a clean booth.
+  const [howOpen, setHowOpen] = useState(() => {
+    try { return localStorage.getItem('fg_hint_done') !== '1'; } catch { return false; }
+  });
   const [confetti, setConfetti] = useState(0); // increments to fire the legendary burst
   const [copied, setCopied] = useState(false);
   const [nearMiss, setNearMiss] = useState(false); // landed adjacent to risky
@@ -371,10 +377,8 @@ export default function App() {
       if (wager > maxWager) { setErr(`Max bet right now: ${formatUnits(maxWager, decimals)} ${symbol}`); return; }
       if (demo && wager > balance) { setErr('Not enough demo balance.'); return; }
 
-      if (!hintDone) {
-        setHintDone(true);
-        try { localStorage.setItem('fg_hint_done', '1'); } catch { /* ignore */ }
-      }
+      // the player is betting now: get the instructions out of the way
+      if (howOpen) dismissHow();
 
       const gameData = encodeGameData(paint);
 
@@ -447,15 +451,19 @@ export default function App() {
     } catch { /* ignore */ }
   }, [paint]);
 
-  // first-visit hint auto-dismiss
+  function dismissHow() {
+    setHowOpen(false);
+    setHintDone(true);
+    try { localStorage.setItem('fg_hint_done', '1'); } catch { /* ignore */ }
+  }
+
+  // First visit: the card steps aside on its own once there has been time to
+  // read it. A reopen from the header stays until it is closed by hand.
   useEffect(() => {
-    if (hintDone) return;
-    const t = window.setTimeout(() => {
-      setHintDone(true);
-      try { localStorage.setItem('fg_hint_done', '1'); } catch { /* ignore */ }
-    }, 10000);
+    if (!howOpen || hintDone) return;
+    const t = window.setTimeout(() => dismissHow(), 14000);
     return () => window.clearTimeout(t);
-  }, [hintDone]);
+  }, [howOpen, hintDone]);
 
   function shareWheel() {
     try { void navigator.clipboard.writeText(window.location.href); } catch { /* ignore */ }
@@ -504,6 +512,9 @@ export default function App() {
         <div className="chips">
           <div className="chip lcd"><span className="lbl">LCD</span><span>{lcd}</span></div>
           <div className="chip"><span className="lbl">Bank</span>{formatUnits(rawBalance, decimals)} {symbol}</div>
+          <button className="icon-btn" onClick={() => { sfx.click(); setHowOpen(true); }} aria-label="how to play" title="How to play">
+            ?
+          </button>
           <button className="icon-btn" onClick={() => setMuted(sfx.toggleMute())} aria-label="toggle sound">
             {muted ? '🔇' : '🔊'}
           </button>
@@ -551,14 +562,43 @@ export default function App() {
             </div>
           )}
 
-          {!hintDone && stats.spins === 0 && (
-            <div className="paint-hint" onClick={() => { setHintDone(true); try { localStorage.setItem('fg_hint_done', '1'); } catch { /* ignore */ } }}>
-              <div className="hint-hand">👆</div>
-              <div className="hint-card">
-                <span><b>1 · TAP A SLICE</b>: paint it safe, mid or risky. You choose the payouts.</span>
-                <span><b>2 · SPIN</b>: the wheel itself is always fair. RTP stays 96% however you paint.</span>
-                <button className="hint-ok" type="button">GOT IT</button>
+          {howOpen && (
+            <div className="howto" role="note" aria-label="how to play">
+              <div className="howto-head">
+                <h3>HOW TO PLAY</h3>
+                <button className="howto-x" type="button" onClick={dismissHow} aria-label="close how to play">✕</button>
               </div>
+
+              <div className="howto-steps">
+                <div className="howto-step paint">
+                  <span className="howto-num">1</span>
+                  <span>
+                    <b>PAINT A SLICE.</b> Tap any slice to make it Safe, Mid or Risky. The multiplier on each
+                    slice moves with it, so you are setting the paytable. The odds never change.
+                  </span>
+                </div>
+                <div className="howto-step spin">
+                  <span className="howto-num">2</span>
+                  <span>
+                    <b>SPIN.</b> One VRF word picks the slice with rejection sampling, so every slice is exactly
+                    as likely as every other one. Nobody can steer it, us included.
+                  </span>
+                </div>
+                <div className="howto-step collect">
+                  <span className="howto-num">3</span>
+                  <span>
+                    <b>COLLECT.</b> Every spin also drops a carnival prize. Fill all six of a rarity to unlock a
+                    new booth livery.
+                  </span>
+                </div>
+              </div>
+
+              <div className="howto-foot">
+                <b>RTP stays 96% for every legal paint.</b> Paint it gentle or paint it wild: the maths is
+                identical every time. The declared maths and the verifier that proves it live in the repo.
+              </div>
+
+              <button className="howto-ok" type="button" onClick={dismissHow}>GOT IT</button>
             </div>
           )}
         </section>
