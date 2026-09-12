@@ -718,100 +718,106 @@ export default function App() {
             </div>
           )}
 
-          <div className="panel">
-            <div className="panel-title">
-              <h2>Prize Album</h2>
-              <button className="album-open" type="button" onClick={() => { sfx.click(); setAlbumOpen(true); }}>
-                SEASON 1 · {shelf.owned}/{shelf.total}
-              </button>
-            </div>
-
-            <div className="season-bar"><i style={{ width: `${(album.have / album.total) * 100}%` }} /></div>
-
-            <div className="shelf-row">
-              {[0, 1, 2, 3, 4, 5].map(toy => (
-                <ShelfCell key={toy} toy={toy} collection={collection} fresh={prizeToast?.fresh && prizeToast.id === toy} />
-              ))}
-            </div>
-
-            <div className="set-row">
-              {album.sets.map(({ set, have, total, done }) => (
-                <div
-                  key={set.id}
-                  className={`set-chip${done ? ' done' : ''}`}
-                  title={`${set.label}: ${have}/${total}, complete it for the ${set.rewardLabel}`}
-                >
-                  <span className="s-name">{set.label}</span>
-                  <span className="s-count">{done ? '✓' : `${have}/${total}`}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="livery-row">
-              {LIVERIES.map(l => {
-                const unlocked = liveryUnlocked.has(l.id);
-                const active = collection.activeLivery === l.id;
-                return (
-                  <button
-                    key={l.id}
-                    className={`livery-dot ${l.id}${active ? ' active' : ''}${unlocked ? '' : ' locked'}`}
-                    title={unlocked ? l.label : `${l.label}: ${l.unlockHint}`}
-                    onClick={() => { if (unlocked) { sfx.click(); const c = { ...collection, activeLivery: l.id }; setCollection(c); saveCollection(c); } }}
-                  >
-                    {unlocked ? '' : '🔒'}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="shelf-progress">
-              <span>
-                {album.complete && collection.stamps.album
-                  ? `season sealed · ${formatStamp(collection.stamps.album)}`
-                  : 'wheel colours change with every complete set'}
-              </span>
-              <span className="stamp">96% RTP always</span>
-            </div>
-          </div>
-
-          <div className="panel">
-            <div className="panel-title">
-              <h2>Daily Booth</h2>
-              <span className="hint">{doneToday}/3 today · day {ladder.day || 1}</span>
-            </div>
-
-            <div className="mission-list">
-              {missions.map(m => {
-                const p = missionProgress(m, dayState);
-                return (
-                  <div key={m.id} className={`mission${p.done ? ' done' : ''}`}>
-                    <span className="m-tick">{p.done ? '✓' : ''}</span>
-                    <span className="m-label">{m.label}</span>
-                    <span className="m-count">{Math.min(p.have, p.target)}/{p.target}</span>
-                    <span className="m-bar"><i style={{ width: `${Math.min(100, (p.have / p.target) * 100)}%` }} /></span>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="ladder">
-              {LADDER.map(r => (
-                <span
-                  key={r.id}
-                  className={`rung${ladder.badges.includes(r.id) ? ' earned' : ''}${ladder.day === r.day ? ' now' : ''}${r.kind === 'wheel' ? ' trophy' : ''}`}
-                  title={`Day ${r.day} · ${r.label}`}
-                >
-                  {r.day}
-                </span>
-              ))}
-            </div>
-
-            <div className="shelf-progress">
-              <span>{dayState.dayComplete ? 'today is banked · stamps are cosmetic' : 'bank all three to climb the ladder'}</span>
-              <span className="stamp">{ladder.badges.length} stamps</span>
-            </div>
-          </div>
         </section>
+
+        {/* The album and the daily booth are stage items, not controls: as the
+            last children of `.controls` they made that column far taller than
+            the wheel, and the wheel panel stretched to match it, leaving a
+            large empty card under the wheel. As a second grid row they sit
+            beside each other instead. */}
+        <div className="panel">
+          <div className="panel-title">
+            <h2>Prize Album</h2>
+            <button className="album-open" type="button" onClick={() => { sfx.click(); setAlbumOpen(true); }}>
+              SEASON 1 · {shelf.owned}/{shelf.total}
+            </button>
+          </div>
+
+          <div className="season-bar"><i style={{ width: `${(album.have / album.total) * 100}%` }} /></div>
+
+          <div className="shelf-row">
+            {[0, 1, 2, 3, 4, 5].map(toy => (
+              <ShelfCell key={toy} toy={toy} collection={collection} fresh={prizeToast?.fresh && prizeToast.id === toy} />
+            ))}
+          </div>
+
+          <div className="set-row">
+            {album.sets.map(({ set, have, total, done }) => (
+              <div
+                key={set.id}
+                className={`set-chip${done ? ' done' : ''}`}
+                title={`${set.label}: ${have}/${total}, complete it for the ${set.rewardLabel}`}
+              >
+                <span className="s-name">{set.label}</span>
+                <span className="s-count">{done ? '✓' : `${have}/${total}`}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="livery-row">
+            {LIVERIES.map(l => {
+              const unlocked = liveryUnlocked.has(l.id);
+              const active = collection.activeLivery === l.id;
+              return (
+                <button
+                  key={l.id}
+                  className={`livery-dot ${l.id}${active ? ' active' : ''}${unlocked ? '' : ' locked'}`}
+                  title={unlocked ? l.label : `${l.label}: ${l.unlockHint}`}
+                  onClick={() => { if (unlocked) { sfx.click(); const c = { ...collection, activeLivery: l.id }; setCollection(c); saveCollection(c); } }}
+                >
+                  {unlocked ? '' : '🔒'}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="shelf-progress">
+            <span>
+              {album.complete && collection.stamps.album
+                ? `season sealed · ${formatStamp(collection.stamps.album)}`
+                : 'wheel colours change with every complete set'}
+            </span>
+            <span className="stamp">96% RTP always</span>
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-title">
+            <h2>Daily Booth</h2>
+            <span className="hint">{doneToday}/3 today · day {ladder.day || 1}</span>
+          </div>
+
+          <div className="mission-list">
+            {missions.map(m => {
+              const p = missionProgress(m, dayState);
+              return (
+                <div key={m.id} className={`mission${p.done ? ' done' : ''}`}>
+                  <span className="m-tick">{p.done ? '✓' : ''}</span>
+                  <span className="m-label">{m.label}</span>
+                  <span className="m-count">{Math.min(p.have, p.target)}/{p.target}</span>
+                  <span className="m-bar"><i style={{ width: `${Math.min(100, (p.have / p.target) * 100)}%` }} /></span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="ladder">
+            {LADDER.map(r => (
+              <span
+                key={r.id}
+                className={`rung${ladder.badges.includes(r.id) ? ' earned' : ''}${(ladder.day || 1) === r.day ? ' now' : ''}${r.kind === 'wheel' ? ' trophy' : ''}`}
+                title={`Day ${r.day} · ${r.label}`}
+              >
+                {r.day}
+              </span>
+            ))}
+          </div>
+
+          <div className="shelf-progress">
+            <span>{dayState.dayComplete ? 'today is banked · stamps are cosmetic' : 'bank all three to climb the ladder'}</span>
+            <span className="stamp">{ladder.badges.length} stamps</span>
+          </div>
+        </div>
       </main>
 
       <footer className="fair-note">
