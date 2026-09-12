@@ -12,23 +12,29 @@ export type Collection = {
   /** key `${toyId}:${rarity}` → owned count */
   counts: Record<string, number>;
   activeLivery: string;
+  /** trophies earned outside the sets, currently the mission ladder's gilded wheel */
+  trophies: string[];
+  /** ids → YYYY-MM-DD, the first time a set or the album was completed */
+  stamps: Record<string, string>;
 };
 
 const KEY = 'fairground.collection.v1';
 
-const EMPTY: Collection = { counts: {}, activeLivery: 'classic' };
+export const EMPTY: Collection = { counts: {}, activeLivery: 'classic', trophies: [], stamps: {} };
 
 export function loadCollection(): Collection {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return { ...EMPTY, counts: {} };
-    const parsed = JSON.parse(raw) as Collection;
+    if (!raw) return { ...EMPTY, counts: {}, trophies: [], stamps: {} };
+    const parsed = JSON.parse(raw) as Partial<Collection>;
     return {
       counts: typeof parsed.counts === 'object' && parsed.counts ? parsed.counts : {},
       activeLivery: typeof parsed.activeLivery === 'string' ? parsed.activeLivery : 'classic',
+      trophies: Array.isArray(parsed.trophies) ? parsed.trophies : [],
+      stamps: typeof parsed.stamps === 'object' && parsed.stamps ? parsed.stamps : {},
     };
   } catch {
-    return { ...EMPTY, counts: {} };
+    return { ...EMPTY, counts: {}, trophies: [], stamps: {} };
   }
 }
 
@@ -54,9 +60,55 @@ export function addToCollection(c: Collection, toyIndex: number, rarity: ToyRari
   return { next, isNew };
 }
 
-// ── liveries: unlocked by completing rarity sets ────────────────────────────
+// ── the album: three sets of six, one per rarity ─────────────────────────────
+// Each set carries a booth livery, the album itself carries a season stamp.
+
+export type PrizeSet = {
+  id: string;
+  label: string;
+  rarity: ToyRarity;
+  rewardLivery: string;
+  rewardLabel: string;
+};
+
+export const SETS: PrizeSet[] = [
+  { id: 'midway', label: 'Midway Set', rarity: 'common', rewardLivery: 'midway', rewardLabel: 'Midway livery' },
+  { id: 'backstage', label: 'Backstage Set', rarity: 'rare', rewardLivery: 'mint', rewardLabel: 'Mint livery' },
+  { id: 'honour', label: 'Ring of Honour', rarity: 'legendary', rewardLivery: 'twilight', rewardLabel: 'Twilight livery' },
+];
+
+export function setProgress(c: Collection, rarity: ToyRarity): { have: number; total: number; done: boolean } {
+  const have = TOY_NAMES.filter((name) => (c.counts[`${name}:${rarity}`] ?? 0) > 0).length;
+  return { have, total: TOY_NAMES.length, done: have === TOY_NAMES.length };
+}
+
+export function albumProgress(c: Collection): {
+  sets: { set: PrizeSet; have: number; total: number; done: boolean }[];
+  have: number;
+  total: number;
+  complete: boolean;
+} {
+  const sets = SETS.map((set) => ({ set, ...setProgress(c, set.rarity) }));
+  const have = sets.reduce((acc, s) => acc + s.have, 0);
+  const total = sets.reduce((acc, s) => acc + s.total, 0);
+  return { sets, have, total, complete: have === total };
+}
+
+/** Record the first date a set or the album was finished. */
+export function withStamp(c: Collection, id: string, dayKey: string): Collection {
+  if (c.stamps[id]) return c;
+  return { ...c, stamps: { ...c.stamps, [id]: dayKey } };
+}
+
+/** Grant a trophy once. Used by the mission ladder's seventh rung. */
+export function withTrophy(c: Collection, id: string): Collection {
+  if (c.trophies.includes(id)) return c;
+  return { ...c, trophies: [...c.trophies, id] };
+}
+
+// ── liveries: unlocked by completing rarity sets, plus the ladder trophy ────
 // classic is default; midway = all 6 commons; mint = all 6 rares;
-// twilight = all 6 legendaries (the flex).
+// twilight = all 6 legendaries (the flex); gilded = seven days of missions.
 
 export type Livery = { id: string; label: string; unlockHint: string };
 
@@ -65,6 +117,7 @@ export const LIVERIES: Livery[] = [
   { id: 'midway', label: 'Midway', unlockHint: 'collect all 6 common prizes' },
   { id: 'mint', label: 'Mint', unlockHint: 'collect all 6 rare prizes' },
   { id: 'twilight', label: 'Twilight', unlockHint: 'collect all 6 legendary prizes' },
+  { id: 'gilded', label: 'Gilded', unlockHint: 'bank seven days of missions' },
 ];
 
 export function unlockedLiveries(c: Collection): Set<string> {
@@ -74,6 +127,7 @@ export function unlockedLiveries(c: Collection): Set<string> {
   if (hasAll('common')) unlocked.add('midway');
   if (hasAll('rare')) unlocked.add('mint');
   if (hasAll('legendary')) unlocked.add('twilight');
+  if ((c.trophies ?? []).includes('gilded')) unlocked.add('gilded');
   return unlocked;
 }
 

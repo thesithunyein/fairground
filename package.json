@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --port 3121 --strictPort",
     "typecheck": "tsc --noEmit",
-    "verify:rtp": "node scripts/verify-rtp.mjs"
+    "verify:rtp": "node scripts/verify-rtp.mjs",
+    "verify:missions": "node scripts/verify-missions.mjs"
   },
   "dependencies": {
     "penpal": "^7.0.4",

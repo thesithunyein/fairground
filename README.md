@@ -33,6 +33,16 @@ Real money mode runs inside chain.wtf through the official casino SDK bridge: th
 | Cosmetics cannot touch payouts | Prize drops derive from leftover VRF bytes and are proven payout-invariant by test. |
 | Verified | 300 of 300 legal composition classes price to exactly 96 percent, Monte Carlo over ~2M spins lands at 95.85 percent, and 3 of 3 end-to-end rounds settle on a live VRF node with payouts exact to the wei. Full detail in [docs/MATH.md](docs/MATH.md). |
 
+## Retention: the album and the daily booth
+
+The spin is the core loop, not the whole game. Two systems sit on top of it, and both are strictly cosmetic.
+
+**The prize album.** Every spin also drops a carnival toy from leftover VRF bytes: six toys across common, rare and legendary. The eighteen prizes are grouped into three sets of six, one per rarity, framed as Season 1 with a completion counter. Completing a set unlocks a wheel livery, and the seven day ladder ends in a gilded wheel. Rarity odds are 76.6 / 19.5 / 3.9 percent, so a set is a goal rather than a formality.
+
+**The daily booth.** Three objectives rotate each day, chosen deterministically from a pool of eleven (spin volume, wins, risk appetite, a legendary drop, a completed set, sharing your wheel). The three never overlap: one per theme, so a day never asks for the same thing twice. Meeting all three banks the day and climbs a seven rung ladder of stamps, with consecutive days required and a missed day sending the run back to rung one.
+
+Neither system can touch a multiplier, a payout or an outcome. `src/lib/missions.ts` is pure logic that never reads the game maths or the balance, and `npm run verify:missions` asserts that property alongside the board rules, so a future edit cannot quietly turn a cosmetic into an edge.
+
 ## Architecture
 
 ```mermaid
@@ -73,13 +83,15 @@ fairground/
 │   ├── lib/
 │   │   ├── game.ts             Shared math, exact mirror of the contract
 │   │   ├── collection.ts       Prize shelf, sets, liveries (localStorage)
+│   │   ├── missions.ts         Daily objectives + seven day ladder (pure logic)
 │   │   ├── sound.ts            WebAudio synth kit, zero audio assets
 │   │   └── useCasinoHost.ts    Bridge hook: host mode, demo fallback, resume
-│   ├── App.tsx                 Booth UI, bet flow, stats, milestones
+│   ├── App.tsx                 Booth UI, bet flow, stats, missions, album
 │   ├── main.tsx                Entry + crash boundary
 │   └── styles/fairground.css   Design system
 ├── scripts/
 │   ├── verify-rtp.mjs          Exhaustive class sweep + Monte Carlo proof
+│   ├── verify-missions.mjs     37 rule checks: boards, banking, ladder, cosmetics
 │   └── e2e-round.mjs           Full bet-VRF-settle round vs the local simulator
 ├── public/
 │   ├── game.manifest.json      SDK manifest
@@ -102,7 +114,7 @@ Report anything suspicious by opening a GitHub issue or reaching out on the Chai
 
 ## Performance
 
-62 KB gzipped total, zero runtime image assets (the game is drawn entirely in SVG and CSS, audio is synthesized in the browser), self-hosted font subsets and no third-party requests of any kind. The game paints its first frame before most sites finish their font fetch. The only PNGs in the repo are the favicon, the social card and the catalog icon and cover declared in `game.manifest.json`, none of which block the first frame. Designed to load near-instantly on mobile data, which the jam checks.
+65 KB gzipped total, zero runtime image assets (the game is drawn entirely in SVG and CSS, audio is synthesized in the browser), self-hosted font subsets and no third-party requests of any kind. The game paints its first frame before most sites finish their font fetch. The only PNGs in the repo are the favicon, the social card and the catalog icon and cover declared in `game.manifest.json`, none of which block the first frame. Designed to load near-instantly on mobile data, which the jam checks.
 
 ## Development
 
@@ -110,6 +122,7 @@ Report anything suspicious by opening a GitHub issue or reaching out on the Chai
 npm install
 npm run dev            # http://localhost:3120, standalone free-play mode
 npm run verify:rtp     # exhaustive RTP proof, all legal paints
+npm run verify:missions # daily objectives, banking and the seven day ladder
 npm run build          # production build to dist/
 
 # full on-chain loop: start the casino SDK simulator, then

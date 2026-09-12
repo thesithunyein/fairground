@@ -482,6 +482,7 @@ body {
 .livery-dot.midway { background: linear-gradient(135deg, var(--blue) 50%, var(--paper-gold) 50%); }
 .livery-dot.mint { background: linear-gradient(135deg, var(--green) 50%, var(--paper-blue) 50%); }
 .livery-dot.twilight { background: linear-gradient(135deg, #7a4dff 50%, #ffd7f0 50%); }
+.livery-dot.gilded { background: linear-gradient(135deg, #f5b301 50%, #f2e2b0 50%); }
 
 /* ── boot screen ────────────────────────────────────────────────────── */
 .boot {
@@ -542,6 +543,84 @@ body {
 .stats-strip .hot b { color: var(--red-deep); }
 
 /* ── first-visit paint hint ──────────────────────────────────────── */
+/* ── prize album: sets, the season bar, and the album sheet ─────────── */
+.album-open {
+  font-family: var(--font-pixel); font-size: 9px; letter-spacing: 0.06em;
+  border: 2px solid var(--ink); border-radius: 7px;
+  background: var(--paper-gold); color: var(--ink);
+  padding: 3px 8px; box-shadow: 2px 2px 0 var(--ink); cursor: pointer;
+}
+.album-open:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
+
+.season-bar {
+  height: 9px; margin: 0 2px 10px;
+  border: 2px solid var(--ink); border-radius: 999px;
+  background: var(--paper); overflow: hidden;
+}
+.season-bar i { display: block; height: 100%; background: var(--blue); transition: width 0.4s ease; }
+
+.set-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 9px; }
+.set-chip {
+  border: 2px solid var(--ink); border-radius: 9px;
+  background: var(--paper); padding: 6px 7px;
+  display: flex; flex-direction: column; gap: 2px;
+  font-size: 10px; font-weight: 800; min-width: 0;
+}
+.set-chip .s-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.set-chip .s-count { font-family: var(--font-pixel); font-size: 10px; color: var(--ink-soft); }
+.set-chip.done { background: var(--paper-green); }
+.set-chip.done .s-count { color: var(--ink); }
+
+.howto.album { width: min(620px, 100%); }
+.album-lead {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  font-family: var(--font-pixel); font-size: 10px; letter-spacing: 0.08em;
+}
+.album-set { display: flex; flex-direction: column; gap: 6px; }
+.album-set-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 11px; }
+.album-set-head b { letter-spacing: 0.04em; }
+.album-set-head span { color: var(--ink-soft); font-weight: 800; text-align: right; }
+.album-set .shelf-row { grid-template-columns: repeat(6, 1fr); }
+
+/* ── daily booth: missions and the seven rung ladder ────────────────── */
+.mission-list { display: flex; flex-direction: column; gap: 7px; }
+.mission {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  align-items: center; gap: 4px 7px;
+  font-size: 11.5px;
+}
+.mission .m-tick {
+  grid-row: 1 / span 2;
+  width: 16px; height: 16px; border-radius: 5px;
+  border: 2px solid var(--ink); background: var(--card);
+  display: grid; place-items: center;
+  font-size: 10px; font-weight: 900; color: var(--ink);
+}
+.mission .m-label { font-weight: 700; }
+.mission .m-count { font-family: var(--font-pixel); font-size: 9px; color: var(--ink-soft); }
+.mission .m-bar {
+  grid-column: 2 / span 2;
+  height: 6px; border-radius: 999px;
+  background: var(--paper-2); border: 1px solid var(--line);
+  overflow: hidden;
+}
+.mission .m-bar i { display: block; height: 100%; background: var(--blue); transition: width 0.35s ease; }
+.mission.done .m-tick { background: var(--green); color: #fff; }
+.mission.done .m-bar i { background: var(--green); }
+
+.ladder { display: flex; gap: 6px; margin-top: 10px; }
+.rung {
+  flex: 1; min-width: 0; height: 26px;
+  border: 2px solid var(--ink); border-radius: 8px;
+  background: var(--paper);
+  display: grid; place-items: center;
+  font-family: var(--font-pixel); font-size: 9px; color: var(--ink-soft);
+}
+.rung.earned { background: var(--gold); color: var(--ink); }
+.rung.now { outline: 3px solid var(--blue); outline-offset: 1px; }
+.rung.trophy { background: linear-gradient(135deg, var(--gold), #f2e2b0); color: var(--ink); }
+
 /* ── how to play: a centered modal, on a first visit and from header "?" ──
    Centered rather than in the flow on purpose: instructions nobody scrolls
    to are instructions nobody reads. */
@@ -710,6 +789,9 @@ html, body { overflow-x: clip; } /* phones: never scroll sideways */
 
   .spin-btn {
     position: fixed;
+    /* width must be auto here: the base rule sets width 100%, which would win
+       over left/right and push the button 10px past the right edge */
+    width: auto;
     left: 10px; right: 10px;
     bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     z-index: 40;

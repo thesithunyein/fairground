@@ -13,14 +13,36 @@ import {
   type Paint,
   type Tier,
 } from './lib/game';
+import {
+  LADDER,
+  allMissionsDone,
+  completeDay,
+  dailyMissions,
+  loadDaily,
+  loadLadder,
+  missionProgress,
+  recordMetric,
+  rollDaily,
+  saveDaily,
+  saveLadder,
+  type DailyState,
+  type LadderState,
+  type Metric,
+} from './lib/missions';
 import { useCasinoHost } from './lib/useCasinoHost';
 import { Wheel } from './components/Wheel';
 import { PrizeSprite, BootWheel, WheelBadge } from './components/Prizes';
 import {
+  albumProgress,
   loadCollection,
   saveCollection,
   addToCollection,
+  SETS,
+  LIVERIES,
+  TOY_NAMES,
   unlockedLiveries,
+  withStamp,
+  withTrophy,
   shelfStats,
   type Collection,
   type ToyRarity,
@@ -29,7 +51,7 @@ import * as sfx from './lib/sound';
 
 const DEMO_BALANCE_START = 1000_000000n; // 1000.00 (6 decimals)
 // capture mode: ?clean=1 hides the demo ticket stamp while recording promo footage
-// (cosmetic only — demo play itself is unchanged, and the normal page keeps the stamp)
+// (cosmetic only: demo play itself is unchanged, and the normal page keeps the stamp)
 const CLEAN_MODE = new URLSearchParams(window.location.search).has('clean');
 const PHASE_WAITING_RANDOMNESS = 2;
 const PHASE_SETTLED = 3;
@@ -176,6 +198,11 @@ export default function App() {
   const [spinNonce, setSpinNonce] = useState(0);
   const [pendingSegment, setPendingSegment] = useState<number | null>(null);
   const [collection, setCollection] = useState<Collection>(() => loadCollection());
+  const [albumOpen, setAlbumOpen] = useState(false);
+  // today's objectives, the run of banked days, and the ladder they climb
+  const [dayState, setDayState] = useState<DailyState>(() => loadDaily(dayKey()));
+  const [ladder, setLadder] = useState<LadderState>(() => loadLadder());
+  const missions = useMemo(() => dailyMissions(dayState.dayKey), [dayState.dayKey]);
   const [prizeToast, setPrizeToast] = useState<{ id: number; rarity: ToyRarity; fresh: boolean } | null>(null);
   const [muted, setMuted] = useState(() => { sfx.initSound(); return sfx.isMuted(); });
   const [balance, setBalance] = useState(DEMO_BALANCE_START);
@@ -262,7 +289,7 @@ export default function App() {
   }, [snapshot, round, demo]);
 
   // session resume: a reload mid-VRF-wait recovers the in-flight round from
-  // the host's snapshot — the wheel animates to its segment when VRF lands.
+  // the host's snapshot, and the wheel animates to its segment when VRF lands.
   useEffect(() => {
     if (demo || !snapshot || round) return;
     const row = snapshot.sessions.items.find(
@@ -307,6 +334,13 @@ export default function App() {
       setBalance(b => (b - r.wager + outcome.payout));
     }
 
+    // daily objectives (cosmetic only, see lib/missions.ts)
+    recordMission('spins');
+    if (won) recordMission('wins');
+    if (outcome.tier === 2) recordMission('riskyLands');
+    if (won && outcome.tier === 2) recordMission('riskyWins');
+    if (outcome.prize.rarity === 'legendary') recordMission('legendaryPrizes');
+
     // session stats, streaks, milestones (cosmetic, client-only)
     const winAmount = formatUnits(outcome.payout, decimals);
     const bigWin = outcome.tier === 2 || outcome.prize.rarity === 'legendary';
@@ -335,17 +369,24 @@ export default function App() {
       return next;
     });
 
-    // prize collection
+    // prize collection, and the album stamps a set the day it is finished
     const { next, isNew } = addToCollection(collection, outcome.prize.id, outcome.prize.rarity);
-    setCollection(next);
-    saveCollection(next);
+    let updated = next;
     const before = unlockedLiveries(collection);
     const after = unlockedLiveries(next);
     const newUnlock = [...after].find(l => !before.has(l));
+    if (newUnlock) {
+      const set = SETS.find(s => s.rewardLivery === newUnlock);
+      if (set) updated = withStamp(updated, set.id, dayKey());
+      recordMission('setsCompleted');
+    }
+    if (albumProgress(updated).complete) updated = withStamp(updated, 'album', dayKey());
+    setCollection(updated);
+    saveCollection(updated);
     setPrizeToast({ id: outcome.prize.id, rarity: outcome.prize.rarity, fresh: isNew });
     window.setTimeout(() => setPrizeToast(null), 2600);
     if (newUnlock) {
-      window.setTimeout(() => { sfx.fanfare(); setCollection(c => ({ ...c, activeLivery: newUnlock })); saveCollection({ ...next, activeLivery: newUnlock }); }, 900);
+      window.setTimeout(() => { sfx.fanfare(); setCollection(c => ({ ...c, activeLivery: newUnlock })); saveCollection({ ...updated, activeLivery: newUnlock }); }, 900);
     } else {
       window.setTimeout(() => sfx.prize(0), 500);
     }
@@ -462,12 +503,46 @@ export default function App() {
     try { localStorage.setItem('fg_hint_done', '1'); } catch { /* ignore */ }
   }
 
+  // ── daily missions ──────────────────────────────────────────────────────
+  // Progress is recorded from gameplay and banked as soon as all three
+  // objectives are met. Everything awarded here is cosmetic; no reward path
+  // touches a wager, a multiplier or an outcome.
+  function recordMission(metric: Metric, amount = 1) {
+    setDayState(prev => recordMetric(rollDaily(prev, dayKey()), metric, amount));
+  }
+
+  useEffect(() => { saveDaily(dayState); }, [dayState]);
+  useEffect(() => { saveLadder(ladder); }, [ladder]);
+
+  useEffect(() => {
+    if (dayState.dayComplete) return;
+    if (!allMissionsDone(missions, dayState)) return;
+    const banked = completeDay(dayState, ladder, missions, dayState.dayKey);
+    if (!banked.awarded) return;
+    setDayState(banked.daily);
+    setLadder(banked.ladder);
+    window.setTimeout(() => {
+      setLcd(`★ DAY ${banked.ladder.day} · ${banked.awarded!.label.toUpperCase()} ★`);
+      sfx.fanfare();
+    }, 700);
+    if (banked.awarded.kind === 'wheel') {
+      const withPrize = withTrophy(collection, banked.awarded.id);
+      setCollection(withPrize);
+      saveCollection(withPrize);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayState, missions, ladder, collection]);
+
   // The instructions are a centered modal now, so they stay until the player
   // closes them: no timer racing a slow reader. Escape closes, and the page
-  // behind the backdrop is held still while it is open.
+  // behind the backdrop is held still while it is open. The album shares it.
   useEffect(() => {
-    if (!howOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') dismissHow(); };
+    if (!howOpen && !albumOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (albumOpen) setAlbumOpen(false);
+      else dismissHow();
+    };
     window.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -475,11 +550,12 @@ export default function App() {
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [howOpen]);
+  }, [howOpen, albumOpen]);
 
   function shareWheel() {
     try { void navigator.clipboard.writeText(window.location.href); } catch { /* ignore */ }
     setCopied(true);
+    recordMission('shareCopied');
     window.setTimeout(() => setCopied(false), 1500);
   }
 
@@ -492,6 +568,8 @@ export default function App() {
 
   const liveryUnlocked = unlockedLiveries(collection);
   const shelf = shelfStats(collection);
+  const album = albumProgress(collection);
+  const doneToday = missions.filter(m => missionProgress(m, dayState).done).length;
 
   if (mode === 'pending') {
     return (
@@ -642,33 +720,95 @@ export default function App() {
 
           <div className="panel">
             <div className="panel-title">
-              <h2>Prize Shelf</h2>
-              <span className="hint">{shelf.owned}/{shelf.total} collected</span>
+              <h2>Prize Album</h2>
+              <button className="album-open" type="button" onClick={() => { sfx.click(); setAlbumOpen(true); }}>
+                SEASON 1 · {shelf.owned}/{shelf.total}
+              </button>
             </div>
+
+            <div className="season-bar"><i style={{ width: `${(album.have / album.total) * 100}%` }} /></div>
+
             <div className="shelf-row">
               {[0, 1, 2, 3, 4, 5].map(toy => (
                 <ShelfCell key={toy} toy={toy} collection={collection} fresh={prizeToast?.fresh && prizeToast.id === toy} />
               ))}
             </div>
+
+            <div className="set-row">
+              {album.sets.map(({ set, have, total, done }) => (
+                <div
+                  key={set.id}
+                  className={`set-chip${done ? ' done' : ''}`}
+                  title={`${set.label}: ${have}/${total}, complete it for the ${set.rewardLabel}`}
+                >
+                  <span className="s-name">{set.label}</span>
+                  <span className="s-count">{done ? '✓' : `${have}/${total}`}</span>
+                </div>
+              ))}
+            </div>
+
             <div className="livery-row">
-              {['classic', 'midway', 'mint', 'twilight'].map(id => {
-                const unlocked = liveryUnlocked.has(id);
-                const active = collection.activeLivery === id;
+              {LIVERIES.map(l => {
+                const unlocked = liveryUnlocked.has(l.id);
+                const active = collection.activeLivery === l.id;
                 return (
                   <button
-                    key={id}
-                    className={`livery-dot ${id}${active ? ' active' : ''}${unlocked ? '' : ' locked'}`}
-                    title={unlocked ? id : `locked · ${id === 'midway' ? 'all 6 common' : id === 'mint' ? 'all 6 rare' : id === 'twilight' ? 'all 6 legendary' : 'default'}`}
-                    onClick={() => { if (unlocked) { sfx.click(); const c = { ...collection, activeLivery: id }; setCollection(c); saveCollection(c); } }}
+                    key={l.id}
+                    className={`livery-dot ${l.id}${active ? ' active' : ''}${unlocked ? '' : ' locked'}`}
+                    title={unlocked ? l.label : `${l.label}: ${l.unlockHint}`}
+                    onClick={() => { if (unlocked) { sfx.click(); const c = { ...collection, activeLivery: l.id }; setCollection(c); saveCollection(c); } }}
                   >
                     {unlocked ? '' : '🔒'}
                   </button>
                 );
               })}
             </div>
+
             <div className="shelf-progress">
-              <span>wheel colors change with every complete set</span>
+              <span>
+                {album.complete && collection.stamps.album
+                  ? `season sealed · ${formatStamp(collection.stamps.album)}`
+                  : 'wheel colours change with every complete set'}
+              </span>
               <span className="stamp">96% RTP always</span>
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="panel-title">
+              <h2>Daily Booth</h2>
+              <span className="hint">{doneToday}/3 today · day {ladder.day || 1}</span>
+            </div>
+
+            <div className="mission-list">
+              {missions.map(m => {
+                const p = missionProgress(m, dayState);
+                return (
+                  <div key={m.id} className={`mission${p.done ? ' done' : ''}`}>
+                    <span className="m-tick">{p.done ? '✓' : ''}</span>
+                    <span className="m-label">{m.label}</span>
+                    <span className="m-count">{Math.min(p.have, p.target)}/{p.target}</span>
+                    <span className="m-bar"><i style={{ width: `${Math.min(100, (p.have / p.target) * 100)}%` }} /></span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="ladder">
+              {LADDER.map(r => (
+                <span
+                  key={r.id}
+                  className={`rung${ladder.badges.includes(r.id) ? ' earned' : ''}${ladder.day === r.day ? ' now' : ''}${r.kind === 'wheel' ? ' trophy' : ''}`}
+                  title={`Day ${r.day} · ${r.label}`}
+                >
+                  {r.day}
+                </span>
+              ))}
+            </div>
+
+            <div className="shelf-progress">
+              <span>{dayState.dayComplete ? 'today is banked · stamps are cosmetic' : 'bank all three to climb the ladder'}</span>
+              <span className="stamp">{ladder.badges.length} stamps</span>
             </div>
           </div>
         </section>
@@ -678,6 +818,61 @@ export default function App() {
         <span>Provably fair: exactly-uniform wheel · VRF randomness · paytable recomputed on-chain from YOUR paint</span>
         <span className="stamp">DECLARED RTP 96% · HOUSE EDGE 4%</span>
       </footer>
+
+      {/* The album: all 18 prizes grouped into their three sets, each with the
+          livery it pays out, plus the season stamp once every set is done. */}
+      {albumOpen && (
+        <div className="howto-backdrop" onClick={() => setAlbumOpen(false)}>
+          <div
+            className="howto album"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="album-title"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="howto-head">
+              <h3 id="album-title">PRIZE ALBUM · SEASON 1</h3>
+              <button className="howto-x" type="button" onClick={() => setAlbumOpen(false)} aria-label="close album" autoFocus>✕</button>
+            </div>
+
+            <div className="album-lead">
+              <span>THE OPENING SEASON</span>
+              <span className="stamp">{album.have}/{album.total} collected</span>
+            </div>
+
+            {album.sets.map(({ set, have, total, done }) => (
+              <div key={set.id} className="album-set">
+                <div className="album-set-head">
+                  <b>{set.label}</b>
+                  <span>{done ? `complete · ${set.rewardLabel} unlocked` : `${have}/${total} · unlocks the ${set.rewardLabel}`}</span>
+                </div>
+                <div className="shelf-row">
+                  {TOY_NAMES.map((name, toy) => {
+                    const key = `${name}:${set.rarity}`;
+                    const count = collection.counts[key] ?? 0;
+                    return (
+                      <div key={key} className={`prize-cell ${set.rarity}${count > 0 ? ' owned' : ''}`}>
+                        {count > 0
+                          ? <PrizeSprite toy={toy} rarity={set.rarity} size={30} />
+                          : <span style={{ opacity: 0.25, fontSize: 15 }}>?</span>}
+                        {count > 1 && <span className="count">{count}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+            <div className="howto-foot">
+              <b>Collecting changes the booth, never the odds.</b> RTP stays 96% for every legal
+              paint, with or without the album.{' '}
+              {album.complete && collection.stamps.album
+                ? `Season 1 sealed on ${formatStamp(collection.stamps.album)}.`
+                : 'Fill all three sets to seal the season.'}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* How to play, centered over the booth. A newcomer should not have to
           scroll to find out what the game is, so this is a modal on arrival
@@ -743,6 +938,14 @@ export default function App() {
       )}
     </div>
   );
+}
+
+/** 2026-09-12 → 12 Sep 2026, for the album's completion stamp. */
+function formatStamp(dayKey: string): string {
+  const [y, m, d] = dayKey.split('-').map(Number);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  if (!y || !m || !d) return dayKey;
+  return `${d} ${months[m - 1]} ${y}`;
 }
 
 /** Win amount ticks up like a scoreboard. */

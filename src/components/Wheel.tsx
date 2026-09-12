@@ -24,6 +24,12 @@ const LIVERY_SCHEMES: Record<string, Record<Tier, { fill: string; text: string }
     1: { fill: '#7a4dff', text: '#ffffff' },
     2: { fill: '#3d1d8f', text: '#ffd7f0' },
   },
+  // the mission ladder's seventh rung: an all-metal wheel
+  gilded: {
+    0: { fill: '#f2e2b0', text: '#141414' },
+    1: { fill: '#f5b301', text: '#141414' },
+    2: { fill: '#7a5c14', text: '#ffeeb8' },
+  },
 };
 
 export function wheelColors(livery: string): Record<Tier, { fill: string; text: string }> {
