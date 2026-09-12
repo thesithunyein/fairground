@@ -47,7 +47,7 @@ Deadline: **Sep 20, 2026, 23:59 UTC** · Target: **submit Sep 16–17**
 ## After submit
 
 - [x] Entry ID received: `j576k66tcbm28r3qfvfmz234a98e87de`
-- [ ] Confirm the FAIRGROUND card renders in the gallery with the pitch
+- [x] Confirmed: FAIRGROUND card live in the gallery with the pitch (position #1, top-left)
 - [ ] Launch: 30s clip (record at `/?clean=1`), X thread, Discord post
 - [ ] Keep shipping: same URL, newest build counts until Sep 20
 - [ ] Distribution: X thread + demo clip, Discord post, friends through the demo
