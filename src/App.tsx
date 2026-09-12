@@ -312,7 +312,12 @@ export default function App() {
 
   return (
     <div className="app">
-      {demo && <div className="overlay-badge">DEMO MODE — FREE PLAY</div>}
+      {demo && (
+        <div className="overlay-badge" title="Free-play demo — the real game runs inside chain.wtf with your vault balance">
+          <span className="tick-dot" />
+          DEMO TICKET · FREE PLAY
+        </div>
+      )}
 
       <header className="top">
         <div className="brand">

@@ -377,14 +377,38 @@ body {
   transform: rotate(-1.2deg);
 }
 
-/* ── overlay (waiting / demo badge) ─────────────────────────────────── */
+/* ── overlay (demo ticket stamp) ───────────────────────────────────── */
 .overlay-badge {
-  position: absolute; top: 10px; left: 10px; z-index: 5;
+  position: static;
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 5px;
   font-family: var(--font-pixel); font-size: 10px;
-  background: var(--gold); color: var(--ink);
-  border: 2px solid var(--ink); border-radius: 7px;
-  padding: 3px 8px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink); border-radius: 8px;
+  padding: 4px 9px 4px 6px;
   box-shadow: 2px 2px 0 var(--ink);
+  transform: rotate(-2deg);
+  margin: 0 0 8px;
+  overflow: hidden;
+}
+/* punched-ticket notch on both sides */
+.overlay-badge::before, .overlay-badge::after {
+  content: '';
+  position: absolute; top: 50%;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--paper); /* page background → looks punched */
+  border: 2px solid var(--ink);
+  transform: translateY(-50%);
+}
+.overlay-badge::before { left: -6px; }
+.overlay-badge::after { right: -6px; }
+.overlay-badge .tick-dot {
+  width: 8px; height: 8px; border-radius: 2px;
+  background: var(--gold);
+  border: 2px solid var(--ink);
+  flex: 0 0 auto;
 }
 
 /* ── skin picker ────────────────────────────────────────────────────── */
@@ -486,7 +510,7 @@ html, body { overflow-x: clip; } /* phones: never scroll sideways */
   .chip .lbl { font-size: 8px; }
   .chip.lcd { display: none; } /* redundant on phones — the LCD panel below shows status */
   .icon-btn { width: 44px; height: 44px; }
-  .overlay-badge { position: static; align-self: center; margin-bottom: 8px; }
+  .overlay-badge { align-self: center; }
 
   .panel { padding: 11px; border-radius: 14px; }
   .panel-title h2 { font-size: 11px; letter-spacing: 0.12em; }
@@ -525,7 +549,7 @@ html, body { overflow-x: clip; } /* phones: never scroll sideways */
   .shelf-row { gap: 6px; }
   .livery-dot { width: 34px; height: 34px; }
   .fair-note { flex-direction: column; gap: 4px; font-size: 10px; text-align: center; }
-  .overlay-badge { font-size: 9px; padding: 4px 9px; }
+  .overlay-badge { align-self: center; font-size: 9px; padding: 4px 9px 4px 7px; }
   .prize-toast { width: min(92vw, 300px); }
 }
 
