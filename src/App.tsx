@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Component, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import { computeMaxWager } from './chain-sdk/guest';
 import {
   defaultPaint,
@@ -152,6 +152,7 @@ export default function App() {
   });
   const [confetti, setConfetti] = useState(0); // increments to fire the legendary burst
   const [copied, setCopied] = useState(false);
+  const [nearMiss, setNearMiss] = useState(false); // landed adjacent to risky
   const [err, setErr] = useState('');
   const roundRef = useRef<Round | null>(null);
   const placingRef = useRef(false); // guards double-tap double-bet
@@ -240,6 +241,20 @@ export default function App() {
     setPendingSegment(null);
     sfx.land();
     window.setTimeout(() => sfx.sting(outcome.tier, won, outcome.multiplierWad >= 4n), 140);
+
+    // near-miss drama: a losing spin that stopped directly NEXT to a risky wedge
+    const adjacent = [segment - 1 < 0 ? paint.tiers.length - 1 : segment - 1, (segment + 1) % paint.tiers.length];
+    if (!won && adjacent.some(i => r.paint.tiers[i] === 2)) {
+      setNearMiss(true);
+      window.setTimeout(() => sfx.nearMiss(), 620);
+      window.setTimeout(() => setNearMiss(false), 2400);
+    }
+
+    // hot-streak riser on consecutive wins (after the tier sting)
+    if (won) {
+      const nextStreak = stats.streak + 1;
+      if (nextStreak >= 2) window.setTimeout(() => sfx.streakRiser(nextStreak), 420);
+    }
 
     // demo balance bookkeeping
     if (demo) {
@@ -571,10 +586,11 @@ export default function App() {
           )}
 
           {result && !round && (
-            <div className={`result-banner ${result.won ? 'win' : 'lose'}`}>
+            <div className={`result-banner ${result.won ? 'win' : nearMiss ? 'lose near' : 'lose'}`}>
               {result.won
-                ? `WIN ${formatUnits(result.payout, decimals)} ${symbol} · ${result.tier === 2 ? 'RISKY' : result.tier === 1 ? 'MID' : 'SAFE'} paid`
-                : `No win — landed ${result.tier === 2 ? 'risky' : result.tier === 1 ? 'mid' : 'safe'}. Repaint and go again.`}
+                ? <span>WIN <CountUpTo value={parseFloat(formatUnits(result.payout, decimals))} /> {symbol} · {result.tier === 2 ? 'RISKY' : result.tier === 1 ? 'MID' : 'SAFE'} paid</span>
+                : <span>{nearMiss ? 'SO CLOSE — landed next to risky. ' : `No win — landed ${result.tier === 2 ? 'risky' : result.tier === 1 ? 'mid' : 'safe'}. `}Repaint and go again.</span>
+            }
             </div>
           )}
 
@@ -630,6 +646,59 @@ export default function App() {
       )}
     </div>
   );
+}
+
+/** Win amount ticks up like a scoreboard. */
+export class Boundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error, info: ErrorInfo) { console.error('FAIRGROUND crash:', error, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{
+          minHeight: '100vh', display: 'grid', placeItems: 'center',
+          background: '#f7f4ec', color: '#141414', fontFamily: 'monospace', textAlign: 'center', padding: 24,
+        }}>
+          <div>
+            <div style={{ fontSize: 40 }}>🎪</div>
+            <h1 style={{ fontSize: 18, letterSpacing: '0.12em' }}>THE BOOTH JAMMED</h1>
+            <p style={{ fontSize: 12, opacity: 0.7, maxWidth: 320 }}>
+              Something broke on this device. Reload — your prizes and stats are saved.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                marginTop: 12, padding: '10px 22px', fontSize: 14, fontWeight: 900,
+                background: '#2f6bff', color: '#fff', border: '2px solid #141414',
+                borderRadius: 12, boxShadow: '3px 3px 0 #141414', cursor: 'pointer',
+              }}
+            >
+              RELOAD THE FAIRGROUND
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function CountUpTo({ value }: { value: number }) {
+  const [shown, setShown] = useState(value);
+  useEffect(() => {
+    let raf = 0;
+    const t0 = performance.now();
+    const DUR = 650;
+    const step = (now: number) => {
+      const t = Math.min(1, (now - t0) / DUR);
+      setShown(value * (1 - Math.pow(1 - t, 3)));
+      if (t < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+  return <>{shown.toFixed(2)}</>;
 }
 
 function ConfettiBurst() {

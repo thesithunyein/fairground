@@ -134,3 +134,16 @@ export function fanfare(): void {
 export function click(): void {
   tone(1100, 0.025, 'square', 0.06);
 }
+
+/** Near-miss: landed next to a risky wedge — wistful two-note drop. */
+export function nearMiss(): void {
+  tone(392, 0.12, 'triangle', 0.16);
+  tone(311, 0.2, 'triangle', 0.15, 0.12);
+}
+
+/** Hot-streak riser: two quick notes pitched up with every consecutive win. */
+export function streakRiser(streak: number): void {
+  const base = 440 * Math.pow(1.059, Math.min(streak, 8));
+  tone(base, 0.06, 'square', 0.09);
+  tone(base * 1.26, 0.09, 'square', 0.1, 0.06);
+}

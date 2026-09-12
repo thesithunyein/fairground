@@ -58,6 +58,7 @@ export function Wheel({
   const rafRef = useRef(0);
   const lastTickRef = useRef(0);
   const animRef = useRef({ from: 0, to: 0, start: 0, dur: 0 });
+  const [pointerKick, setPointerKick] = useState(0); // peg-flex while spinning
 
   const colors = wheelColors(livery);
   const prices = priceWheel(paint);
@@ -75,23 +76,34 @@ export function Wheel({
     const currentMod = ((current % 360) + 360) % 360;
     let delta = targetMod - currentMod;
     while (delta < 0) delta += 360;
-    const from = current;
-    const to = current + 360 * 5 + delta; // 5 full laps + landing
-    const dur = 3400 + Math.random() * 500;
+    // claw-machine wind-up: pull back 16°, then launch
+    const WINDUP_DEG = 16;
+    const WINDUP_MS = 130;
+    const from = current - WINDUP_DEG;
+    const to = from + WINDUP_DEG + 360 * 5 + delta; // windup + 5 laps + landing
+    const dur = WINDUP_MS + 3400 + Math.random() * 500;
 
     animRef.current = { from, to, start: performance.now(), dur };
     setPhase('spinning');
 
     const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4);
+    const windupT = WINDUP_MS / dur;
 
     const step = (now: number) => {
       const a = animRef.current;
       const t = Math.min(1, (now - a.start) / a.dur);
-      const angle = a.from + (a.to - a.from) * easeOutQuart(t);
+      // two-phase easing: quick reverse pull, then the long decelerating launch
+      const p = t < windupT
+        ? (-WINDUP_DEG * (1 - t / windupT)) / (a.to - a.from) // windup segment
+        : windupT + (1 - windupT) * easeOutQuart((t - windupT) / (1 - windupT));
+      const angle = a.from + (a.to - a.from) * p;
       setRotation(angle);
 
-      // ratchet ticks, pitch scaling with speed
+      // pointer flexes on pegs while fast, settles as it slows
       const speed01 = 1 - t;
+      setPointerKick(t < 1 ? Math.sin(now / 26) * 9 * speed01 * speed01 : 0);
+
+      // ratchet ticks, pitch scaling with speed
       if (now - lastTickRef.current > 30 + 240 * (1 - speed01)) {
         lastTickRef.current = now;
         onTickSound?.(speed01);
@@ -165,17 +177,28 @@ export function Wheel({
               </g>
             );
           })}
-          {/* hub */}
+          {/* hub — center dot wears the livery's risky color */}
           <circle cx={cx} cy={cy} r="34" fill="#fffdf7" stroke="#141414" strokeWidth="4" />
-          <circle cx={cx} cy={cy} r="10" fill="#141414" />
+          <circle cx={cx} cy={cy} r="10" fill={colors[2].fill} stroke="#141414" strokeWidth="2" />
         </g>
 
         {/* static pointer hub cap */}
         <circle cx={cx} cy={cy} r="5" fill="#e8442e" stroke="#141414" strokeWidth="2" />
       </svg>
 
-      {/* pointer at 12 o'clock */}
-      <svg className="pointer" width="44" height="30" viewBox="0 0 44 30" aria-hidden>
+      {/* winning wedge flash overlay */}
+      {phase === 'done' && resultSegment !== null && (
+        <svg className="wedge-flash" viewBox="0 0 400 400" aria-hidden>
+          <path d={wedgePath(resultSegment)} fill="#ffffff" />
+        </svg>
+      )}
+
+      {/* pointer at 12 o'clock — flexes while spinning */}
+      <svg
+        className="pointer"
+        width="44" height="30" viewBox="0 0 44 30" aria-hidden
+        style={{ transform: `translateX(-50%) rotate(${pointerKick.toFixed(2)}deg)`, transformOrigin: '50% 100%' }}
+      >
         <path d="M22 28 L4 4 Q22 10 40 4 Z" fill="#e8442e" stroke="#141414" strokeWidth="3" strokeLinejoin="round" />
       </svg>
     </div>

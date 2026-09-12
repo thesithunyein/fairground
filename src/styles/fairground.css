@@ -172,6 +172,18 @@ body {
   z-index: 3;
   filter: drop-shadow(2px 3px 0 rgba(20, 20, 20, 0.25));
 }
+.wedge-flash {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  animation: wedgeFlash 0.55s ease-out forwards;
+}
+@keyframes wedgeFlash {
+  0% { opacity: 0.85; }
+  100% { opacity: 0; }
+}
+.pointer { transition: transform 60ms linear; will-change: transform; }
+
 .wheel-wrap.spun-shake .wheel-svg { animation: landShake 0.45s ease-out; }
 @keyframes landShake {
   0% { transform: translate(0, 0); }
@@ -619,6 +631,7 @@ html, body { overflow-x: clip; } /* phones: never scroll sideways */
     50% { box-shadow: 0 4px 0 var(--ink), 0 10px 24px rgba(20, 20, 20, 0.28), 0 0 0 7px rgba(47, 107, 255, 0.2); }
   }
 
+  .result-banner.near { background: var(--paper-gold); color: var(--ink); border-color: var(--ink); }
   .stats-strip { font-size: 10px; gap: 4px 10px; padding: 6px 8px; }
   .paint-hint .hint-card { font-size: 10px; }
   .shelf-row { gap: 6px; }
