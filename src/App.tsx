@@ -1101,8 +1101,9 @@ export default function App() {
               <div className="howto-step paint">
                 <span className="howto-num">1</span>
                 <span>
-                  <b>PAINT A SLICE.</b> Tap any slice to make it Safe, Mid or Risky. The multiplier on each
-                  slice moves with it, so you are setting the paytable. The odds never change.
+                  <b>PAINT A SLICE.</b> Pick a stake shape (Gentle, Standard or Wild) or tap any slice
+                  to make it Safe, Mid or Risky. The multiplier on each slice moves with it, so you are
+                  setting the paytable. The odds never change.
                 </span>
               </div>
               <div className="howto-step spin">
