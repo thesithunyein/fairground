@@ -108,9 +108,9 @@ function friendlyBetError(e: unknown, symbol: string): string {
   const raw = e instanceof Error ? e.message : String(e);
   const m = raw.match(/Max bet right now: ([\d.]+)/);
   if (m) return `Max bet right now: ${m[1]} ${symbol}`;
-  if (/BetRiskExceedsLimit|ReservedProfit|reserved profit/i.test(raw)) return "The house can't cover a bet that size right now — go smaller.";
+  if (/BetRiskExceedsLimit|ReservedProfit|reserved profit/i.test(raw)) return "The house can't cover a bet that size right now, go smaller.";
   if (/user rejected|UserRejected|denied/i.test(raw)) return 'Cancelled.';
-  if (raw.length > 90) return 'Bet failed — try again.';
+  if (raw.length > 90) return 'Bet failed, try again.';
   return raw;
 }
 
@@ -124,6 +124,37 @@ function formatUnits(value: bigint, decimals: number): string {
 export default function App() {
   const { hostApi, snapshot, mode } = useCasinoHost();
   const demo = mode === 'demo';
+
+  // Host theme. VISUAL_AND_UX.md asks a polished guest to respect `ui.theme`
+  // and `ui.locale` where practical. We comply inside the host iframe; the
+  // standalone page (jam gallery, judges, shared wheel links) always keeps
+  // the light carnival identity, so the brand reads identically everywhere
+  // it is opened directly. `?theme=dark|light` forces a variant for testing.
+  useEffect(() => {
+    const root = document.documentElement;
+    const forced = new URLSearchParams(window.location.search).get('theme');
+    if (forced === 'dark' || forced === 'light') {
+      root.dataset.theme = forced;
+      return;
+    }
+
+    const hostTheme = snapshot?.ui?.theme;
+    if (mode !== 'host' || !hostTheme) {
+      root.dataset.theme = 'light';
+      return;
+    }
+    if (hostTheme === 'dark' || hostTheme === 'light') {
+      root.dataset.theme = hostTheme;
+      return;
+    }
+
+    // 'system' → follow the OS preference and keep following it live
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const apply = () => { root.dataset.theme = mq.matches ? 'dark' : 'light'; };
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, [mode, snapshot?.ui?.theme]);
 
   const [paint, setPaint] = useState<Paint>(() => {
     // restore a shared/last-used wheel from the URL (?wheel=…), else last local paint
@@ -169,8 +200,8 @@ export default function App() {
   const walletMessage =
     walletIssue === 'setup-required' ? 'Set up your smart vault in the host menu, then come back to play for real.' :
     walletIssue === 'disconnected' ? 'Connect your wallet in the host menu to play for real.' :
-    walletIssue === 'session-key-mismatch' ? 'Session expired — reconnect in the host menu.' :
-    walletIssue ? 'Wallet not ready — open the host menu.' : null;
+    walletIssue === 'session-key-mismatch' ? 'Session expired, reconnect in the host menu.' :
+    walletIssue ? 'Wallet not ready, open the host menu.' : null;
   const rawBalance = demo ? balance : BigInt(snapshot?.balances?.smartVaultBalance ?? '0');
 
   // max wager from live platform limits (heaviest legal paint ≈ 12.37×)
@@ -456,7 +487,7 @@ export default function App() {
   return (
     <div className="app">
       {demo && !CLEAN_MODE && (
-        <div className="overlay-badge" title="Free-play demo — the real game runs inside chain.wtf with your vault balance">
+        <div className="overlay-badge" title="Free-play demo · the real game runs inside chain.wtf with your vault balance">
           <span className="tick-dot" />
           DEMO TICKET · FREE PLAY
         </div>
@@ -482,7 +513,7 @@ export default function App() {
       <main className="stage">
         <section className="panel">
           <div className="panel-title">
-            <h2>The Wheel — paint it, then spin</h2>
+            <h2>The Wheel · paint it, then spin</h2>
             <span className="hint">tap a slice to paint · {paint.segmentCount} slices</span>
           </div>
 
@@ -524,8 +555,8 @@ export default function App() {
             <div className="paint-hint" onClick={() => { setHintDone(true); try { localStorage.setItem('fg_hint_done', '1'); } catch { /* ignore */ } }}>
               <div className="hint-hand">👆</div>
               <div className="hint-card">
-                <span><b>1 · TAP A SLICE</b> — paint it safe, mid or risky. You choose the payouts.</span>
-                <span><b>2 · SPIN</b> — the wheel itself is always fair. RTP stays 96% however you paint.</span>
+                <span><b>1 · TAP A SLICE</b>: paint it safe, mid or risky. You choose the payouts.</span>
+                <span><b>2 · SPIN</b>: the wheel itself is always fair. RTP stays 96% however you paint.</span>
                 <button className="hint-ok" type="button">GOT IT</button>
               </div>
             </div>
@@ -592,7 +623,7 @@ export default function App() {
             <div className={`result-banner ${result.won ? 'win' : nearMiss ? 'lose near' : 'lose'}`}>
               {result.won
                 ? <span>WIN <CountUpTo value={parseFloat(formatUnits(result.payout, decimals))} /> {symbol} · {result.tier === 2 ? 'RISKY' : result.tier === 1 ? 'MID' : 'SAFE'} paid</span>
-                : <span>{nearMiss ? 'SO CLOSE — landed next to risky. ' : `No win — landed ${result.tier === 2 ? 'risky' : result.tier === 1 ? 'mid' : 'safe'}. `}Repaint and go again.</span>
+                : <span>{nearMiss ? 'SO CLOSE · landed next to risky. ' : `No win · landed ${result.tier === 2 ? 'risky' : result.tier === 1 ? 'mid' : 'safe'}. `}Repaint and go again.</span>
             }
             </div>
           )}
@@ -615,7 +646,7 @@ export default function App() {
                   <button
                     key={id}
                     className={`livery-dot ${id}${active ? ' active' : ''}${unlocked ? '' : ' locked'}`}
-                    title={unlocked ? id : `locked — ${id === 'midway' ? 'all 6 common' : id === 'mint' ? 'all 6 rare' : id === 'twilight' ? 'all 6 legendary' : 'default'}`}
+                    title={unlocked ? id : `locked · ${id === 'midway' ? 'all 6 common' : id === 'mint' ? 'all 6 rare' : id === 'twilight' ? 'all 6 legendary' : 'default'}`}
                     onClick={() => { if (unlocked) { sfx.click(); const c = { ...collection, activeLivery: id }; setCollection(c); saveCollection(c); } }}
                   >
                     {unlocked ? '' : '🔒'}
@@ -667,7 +698,7 @@ export class Boundary extends Component<{ children: ReactNode }, { error: Error 
             <div style={{ fontSize: 40 }}>🎪</div>
             <h1 style={{ fontSize: 18, letterSpacing: '0.12em' }}>THE BOOTH JAMMED</h1>
             <p style={{ fontSize: 12, opacity: 0.7, maxWidth: 320 }}>
-              Something broke on this device. Reload — your prizes and stats are saved.
+              Something broke on this device. Reload, your prizes and stats are saved.
             </p>
             <button
               onClick={() => window.location.reload()}

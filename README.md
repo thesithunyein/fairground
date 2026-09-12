@@ -21,7 +21,7 @@ A real-money on-chain casino game: the player paints the payout table of a prova
 
 Every casino wheel fixes the paytable and lets the house choose it. FAIRGROUND inverts that: the wheel is provably uniform, one VRF word per spin, rejection-sampled to an exactly even segment, and the player paints each slice safe, mid or risky before every spin. The Solidity contract derives the multipliers from the paint on-chain and pays out from them. The house cannot rig a paytable it does not set, and the player cannot buy odds: RTP is 96 percent for every legal paint, by construction.
 
-Real money mode runs inside chain.wtf through the official casino SDK bridge: the player's vault balance, the host's bet limits, on-chain settlement. The same build opened standalone runs a labeled free-play mode, which is what the jam gallery and judges see.
+Real money mode runs inside chain.wtf through the official casino SDK bridge: the player's vault balance, the host's bet limits, on-chain settlement. The guest follows the host's `ui.theme` snapshot, so it renders the dark booth inside a dark host app and keeps the light carnival identity everywhere it is opened directly. The same build opened standalone runs a labeled free-play mode, which is what the jam gallery and judges see.
 
 ## How the math stays honest
 
@@ -102,7 +102,7 @@ Report anything suspicious by opening a GitHub issue or reaching out on the Chai
 
 ## Performance
 
-62 KB gzipped total, zero image assets (everything is SVG or CSS), synthesized audio, self-hosted nothing: the game paints its first frame before most sites finish their font fetch. Designed to load near-instantly on mobile data, which the jam checks.
+62 KB gzipped total, zero runtime image assets (the game is drawn entirely in SVG and CSS, audio is synthesized in the browser), self-hosted font subsets and no third-party requests of any kind. The game paints its first frame before most sites finish their font fetch. The only PNGs in the repo are the favicon, the social card and the catalog icon and cover declared in `game.manifest.json`, none of which block the first frame. Designed to load near-instantly on mobile data, which the jam checks.
 
 ## Development
 

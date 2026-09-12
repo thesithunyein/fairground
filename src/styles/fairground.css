@@ -34,6 +34,40 @@
   --radius: 14px;
 }
 
+/* ── host dark variant ──────────────────────────────────────────────────
+   Applied only when the casino host reports `ui.theme: dark` (or `system`
+   with a dark OS preference). The standalone page and light hosts keep the
+   light identity above, byte for byte.
+
+   Deliberately NOT overridden: --green / --gold / --red / --blue. Those are
+   the painted fills of the wheel itself, and the wheel is a physical object:
+   a carnival machine at night still carries a cream-painted wheel, its fixed
+   ink outlines and its green LCD. Only the booth around it gets dark. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* night paper */
+  --paper: #17191c;
+  --paper-2: #1f2226;
+  --grid: rgba(247, 244, 236, 0.045);
+  --ink: #f2eee4;
+  --ink-soft: rgba(242, 238, 228, 0.64);
+  --ink-faint: rgba(242, 238, 228, 0.36);
+  --line: rgba(242, 238, 228, 0.18);
+  --card: #1d2024;
+
+  /* tinted papers (tier pills, prize cells) darken to match */
+  --paper-red: #3a1d18;
+  --paper-gold: #382d12;
+  --paper-green: #16301c;
+  --paper-blue: #1a2542;
+
+  /* chrome-only accent: lifted so inline links stay readable on night paper */
+  --blue-deep: #8aa8ff;
+
+  --shadow-card: 0 1px 0 rgba(0, 0, 0, 0.45), 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 html, body, #root { height: 100%; }

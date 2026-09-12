@@ -148,7 +148,9 @@ export function Wheel({
       <svg className="wheel-svg" viewBox="0 0 400 400" aria-label="FAIRGROUND prize wheel">
         {/* outer rim */}
         <circle cx={cx} cy={cy} r={R + rim / 2} fill="#fffdf7" stroke="#141414" strokeWidth="5" />
-        <circle cx={cx} cy={cy} r={R + rim / 2 - 7} fill="none" stroke="var(--line)" strokeWidth="2" />
+        {/* fixed ink ring: the wheel is artwork, so this must not follow the
+            host theme the way the page chrome does */}
+        <circle cx={cx} cy={cy} r={R + rim / 2 - 7} fill="none" stroke="rgba(20, 20, 20, 0.14)" strokeWidth="2" />
 
         <g transform={`rotate(${rotation} ${cx} ${cy})`}>
           {paint.tiers.map((t, i) => {

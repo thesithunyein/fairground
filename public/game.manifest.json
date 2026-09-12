@@ -9,6 +9,10 @@
       "description": "The honest carnival. Paint the payout tiers on a provably uniform wheel, spin once on VRF, and collect carnival prizes while the wheel stays fair. 96% RTP on every legal paint."
     }
   },
+  "assets": {
+    "iconUrl": "https://fairground.sithunyein.com/icon-512.png",
+    "coverUrl": "https://fairground.sithunyein.com/cover.png"
+  },
   "presentation": {
     "mode": "full-iframe",
     "hostPanels": {
