@@ -47,6 +47,7 @@ export function Wheel({
   interactive,
   onTickSound,
   onLand,
+  heavyShake,
 }: {
   paint: Paint;
   onPaintSegment?: (index: number) => void;
@@ -58,6 +59,8 @@ export function Wheel({
   interactive: boolean;
   onTickSound?: (speed01: number) => void;
   onLand?: () => void;
+  /** a risky win lands harder than a plain one */
+  heavyShake?: boolean;
 }) {
   const [rotation, setRotation] = useState(0);
   const [phase, setPhase] = useState<SpinPhase>('idle');
@@ -150,7 +153,7 @@ export function Wheel({
   };
 
   return (
-    <div className={`wheel-wrap${phase === 'done' ? ' spun-shake' : ''}`}>
+    <div className={`wheel-wrap${phase === 'done' ? ` spun-shake${heavyShake ? ' heavy' : ''}` : ''}`}>
       <svg className="wheel-svg" viewBox="0 0 400 400" aria-label="FAIRGROUND prize wheel">
         {/* outer rim */}
         <circle cx={cx} cy={cy} r={R + rim / 2} fill="#fffdf7" stroke="#141414" strokeWidth="5" />

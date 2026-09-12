@@ -135,6 +135,12 @@ export function click(): void {
   tone(1100, 0.025, 'square', 0.06);
 }
 
+/** Soft refusal: the paint you tapped would make the wheel illegal. */
+export function deny(): void {
+  tone(196, 0.07, 'square', 0.1);
+  tone(150, 0.1, 'square', 0.09, 0.07);
+}
+
 /** Near-miss: landed next to a risky wedge — wistful two-note drop. */
 export function nearMiss(): void {
   tone(392, 0.12, 'triangle', 0.16);

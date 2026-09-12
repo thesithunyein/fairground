@@ -39,6 +39,8 @@ The game is three screens, the way a game app is built rather than one long page
 
 On a wide screen the switcher is a segmented control under the header. On a phone it is a fixed bottom bar with thumb sized targets, the SPIN bar sits directly above it, and only the active screen is in the document, so nothing important is ever below the fold and no screen starts half scrolled. The tab badges carry live counts (prizes collected, objectives done), which is what gives a player a reason to leave the table.
 
+PLAY teaches the whole mechanic without a manual. Three **stake shapes** (Gentle, Standard, Wild) are legal by construction, so one tap gives a newcomer a sensible paint and shows the full risk range. A **price line** under the slices reads back the trade as you paint (`6 of 12 risky - risky pays 1.56x - RTP 96.00%`), which is the part of the design that is otherwise invisible: the more of the wheel you take risky, the less each risky slice pays, and the return never moves. A refused tap is never swallowed, it shakes the panel and says why. A three step **first loop** checklist (paint, spin, collect) retires itself once the loop has been played, and a collapsed **Why this stays fair** panel shows the current paint's counts, its multipliers and the command that proves the maths.
+
 ## Retention: the album and the daily booth
 
 The spin is the core loop, not the whole game. Two systems sit on top of it, and both are strictly cosmetic.

@@ -14,6 +14,7 @@ export type Metric =
   | 'wins'
   | 'riskyLands'
   | 'riskyWins'
+  | 'boldSpins'
   | 'legendaryPrizes'
   | 'setsCompleted'
   | 'shareCopied';
@@ -43,6 +44,7 @@ export const MISSION_POOL: Mission[] = [
   { id: 'wins10', label: 'Win 10 spins', metric: 'wins', target: 10, theme: 'wins', family: 'wins' },
   { id: 'risky3', label: 'Land on risky 3 times', metric: 'riskyLands', target: 3, theme: 'risk', family: 'risk' },
   { id: 'risky6', label: 'Land on risky 6 times', metric: 'riskyLands', target: 6, theme: 'risk', family: 'risk' },
+  { id: 'bold5', label: 'Spin 5 times on a bold paint', metric: 'boldSpins', target: 5, theme: 'risk', family: 'bold' },
   { id: 'riskyWin1', label: 'Win on a risky slice', metric: 'riskyWins', target: 1, theme: 'risk', family: 'riskWin' },
   { id: 'riskyWin3', label: 'Win on risky 3 times', metric: 'riskyWins', target: 3, theme: 'risk', family: 'riskWin' },
   { id: 'legendary1', label: 'Collect a legendary prize', metric: 'legendaryPrizes', target: 1, theme: 'trophy', family: 'trophy' },

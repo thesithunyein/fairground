@@ -227,6 +227,52 @@ export function defaultPaint(): Paint {
   };
 }
 
+/**
+ * Ready-made paints, so a newcomer can play well without learning a rule and
+ * can see the whole risk range in one tap. Every preset is legal by
+ * construction: at least one risky slice, at least one cushion, and risky
+ * never above half the wheel. Risky and mid slices are spread evenly around
+ * the wheel rather than clumped, which is what makes the spread legible.
+ */
+export type PaintPresetId = 'gentle' | 'standard' | 'wild';
+
+export const PAINT_PRESETS: { id: PaintPresetId; label: string; hint: string }[] = [
+  { id: 'gentle', label: 'Gentle', hint: 'one risky slice: a steady grind' },
+  { id: 'standard', label: 'Standard', hint: 'a quarter of the wheel at risky' },
+  { id: 'wild', label: 'Wild', hint: 'half the wheel at risky: the biggest multiples' },
+];
+
+export function presetPaint(segmentCount: number, id: PaintPresetId): Paint {
+  const quarter = Math.round(segmentCount / 4);
+  const risky = id === 'gentle' ? 1 : id === 'wild' ? Math.floor(segmentCount / 2) : quarter;
+  const mid = id === 'gentle' ? Math.max(1, Math.round(segmentCount / 6)) : quarter;
+
+  const tiers = new Array<Tier>(segmentCount).fill(0);
+  const place = (tier: Tier, count: number) => {
+    for (let k = 0; k < count; k += 1) {
+      let idx = Math.floor((k * segmentCount) / count) % segmentCount;
+      while (tiers[idx] !== 0) idx = (idx + 1) % segmentCount;
+      tiers[idx] = tier;
+    }
+  };
+  place(2, risky);
+  place(1, mid);
+
+  const paint: Paint = { segmentCount, tiers };
+  // guards the helper itself: a future edit here can never hand the game an
+  // illegal paint, which would be rejected by the contract on-chain
+  return isLegalPaint(paint) ? paint : defaultPaint();
+}
+
+/** Which preset, if any, matches this paint exactly. */
+export function presetOf(paint: Paint): PaintPresetId | null {
+  for (const p of PAINT_PRESETS) {
+    const candidate = presetPaint(paint.segmentCount, p.id);
+    if (candidate.tiers.every((t, i) => t === paint.tiers[i])) return p.id;
+  }
+  return null;
+}
+
 /** Demo-mode PRNG: xorshift32 seeded from Date.now(), expanded to bytes32. */
 export function demoRandomness(seed: number): HexString {
   let x = seed | 0 || 1;

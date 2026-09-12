@@ -277,6 +277,137 @@ body {
 .r-chip.t2 { border-color: var(--red); }
 .r-chip.win { background: var(--paper-gold); border-color: var(--ink); color: var(--ink); }
 
+/* ── paint presets, the live price readout, and the fairness panel ──────
+   Fast starts and legibility: a legal paint in one tap, the trade shown as
+   you paint, and the maths behind it one disclosure away. */
+.paint-presets {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0;
+  flex-wrap: wrap;
+}
+.pp-label {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.preset {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  min-height: 32px;
+  padding: 5px 10px;
+  background: var(--paper);
+  color: var(--ink-soft);
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.preset:hover { background: var(--paper-2); color: var(--ink); }
+.preset.on {
+  background: var(--blue);
+  border-color: var(--ink);
+  color: #fff;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+.preset:disabled { opacity: 0.5; cursor: default; }
+.pp-state {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--blue-deep);
+}
+
+.paint-readout {
+  display: flex;
+  align-items: center;
+  gap: 6px 12px;
+  flex-wrap: wrap;
+  margin-top: 9px;
+  padding: 7px 10px;
+  border: 2px dashed var(--line);
+  border-radius: 10px;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+.paint-readout b { color: var(--ink); }
+.paint-readout .stamp { margin-left: auto; }
+
+/* a refused paint: the panel gives one short shake and says why */
+.panel.nope { animation: nopeShake 0.4s ease-out; }
+@keyframes nopeShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  45% { transform: translateX(4px); }
+  70% { transform: translateX(-2px); }
+}
+.paint-note {
+  margin-top: 8px;
+  padding: 7px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: var(--paper-red);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.fair-deets { margin-top: 9px; }
+.fair-deets summary {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--blue-deep);
+  cursor: pointer;
+}
+.fair-deets ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.fair-deets code {
+  font-size: 10.5px;
+  background: var(--paper-2);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.fair-deets a { color: var(--blue-deep); font-weight: 800; }
+
+/* the first-session checklist */
+.first-loop {
+  display: flex;
+  align-items: center;
+  gap: 6px 12px;
+  flex-wrap: wrap;
+  padding: 9px 11px;
+  background: var(--card);
+  border: 2px dashed var(--ink);
+  border-radius: var(--radius);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.first-loop .fl-title {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.first-loop .fl-step { display: inline-flex; gap: 5px; align-items: center; }
+.first-loop .fl-step.done { color: var(--green); }
+
 /* the album preview on PLAY: a glance, with the full page one tap away */
 .shelf-jump {
   display: flex;
@@ -351,6 +482,16 @@ body {
   0% { transform: translate(0, 0); }
   25% { transform: translate(-3px, 1px) rotate(-0.4deg); }
   55% { transform: translate(2px, -1px) rotate(0.3deg); }
+  100% { transform: translate(0, 0); }
+}
+/* a risky win lands harder, which is what makes the good outcomes feel big */
+.wheel-wrap.spun-shake.heavy .wheel-svg { animation: landShakeHeavy 0.6s ease-out; }
+@keyframes landShakeHeavy {
+  0% { transform: translate(0, 0); }
+  15% { transform: translate(-7px, 3px) rotate(-1.1deg); }
+  35% { transform: translate(6px, -3px) rotate(0.9deg); }
+  55% { transform: translate(-3px, 2px) rotate(-0.5deg); }
+  75% { transform: translate(2px, -1px) rotate(0.3deg); }
   100% { transform: translate(0, 0); }
 }
 
@@ -872,6 +1013,8 @@ html, body { overflow-x: clip; } /* phones: never scroll sideways */
   .confetti { display: none; }
   .paint-hint .hint-hand { animation: none; }
   .wheel-wrap.spun-shake .wheel-svg { animation: none; }
+  .wheel-wrap.spun-shake.heavy .wheel-svg { animation: none; }
+  .panel.nope { animation: none; }
   .prize-toast { animation: none; }
   .howto-backdrop, .howto { animation: none; }
 }
@@ -898,6 +1041,12 @@ html, body { overflow-x: clip; } /* phones: never scroll sideways */
 
   /* on a phone the album tiles fill the width again */
   .album-set .shelf-row { grid-template-columns: repeat(6, minmax(0, 1fr)); justify-content: stretch; }
+
+  /* presets stay thumb sized, and the readout wraps instead of squeezing */
+  .preset { min-height: 40px; padding: 8px 12px; font-size: 10px; }
+  .paint-readout { gap: 4px 10px; font-size: 11px; }
+  .paint-readout .stamp { margin-left: 0; }
+  .first-loop { font-size: 11px; }
 
   .top {
     flex-direction: row;

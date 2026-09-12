@@ -10,7 +10,12 @@ import {
   decodeGameData,
   demoRandomness,
   demoSeed,
+  presetPaint,
+  presetOf,
+  tierCounts,
+  PAINT_PRESETS,
   type Paint,
+  type PaintPresetId,
   type Tier,
 } from './lib/game';
 import {
@@ -66,6 +71,18 @@ const SCREENS: { id: ScreenId; label: string; icon: string }[] = [
   { id: 'collect', label: 'Collect', icon: '🧸' },
   { id: 'daily', label: 'Daily', icon: '🎟️' },
 ];
+
+/**
+ * Short haptics where the platform actually has them. Android Chrome supports
+ * the Vibration API; iOS Safari does not implement it at all, so this is a
+ * bonus on one platform and never something the game depends on. Muting the
+ * sound is treated as "do not buzz me either".
+ */
+function buzz(pattern: number | number[]) {
+  if (sfx.isMuted()) return;
+  const nav = navigator as Navigator & { vibrate?: (p: number | number[]) => boolean };
+  try { nav.vibrate?.(pattern); } catch { /* no haptics on this device */ }
+}
 
 const PHASE_WAITING_RANDOMNESS = 2;
 const PHASE_SETTLED = 3;
@@ -214,6 +231,14 @@ export default function App() {
   const [collection, setCollection] = useState<Collection>(() => loadCollection());
   // which screen is showing. Starts on the table, because that is the game.
   const [tab, setTab] = useState<ScreenId>('play');
+  // refusal note for a paint that would break the wheel's legality rule
+  const [paintNote, setPaintNote] = useState<string | null>(null);
+  const paintNoteTimer = useRef(0);
+  // the first-session checklist: paint, spin, collect, then it retires for good
+  const [painted, setPainted] = useState(false);
+  const [firstLoopDone, setFirstLoopDone] = useState(() => {
+    try { return localStorage.getItem('fg_first_loop_v1') === '1'; } catch { return false; }
+  });
   // the table readout beside the LCD: the last few settled spins
   const [history, setHistory] = useState<{ tier: number; won: boolean; x: string }[]>([]);
   // today's objectives, the run of banked days, and the ladder they climb
@@ -261,6 +286,13 @@ export default function App() {
 
   const prices = priceWheel(paint);
   const legal = isLegalPaint(paint);
+  const counts = tierCounts(paint);
+  const riskyCount = Number(counts[2]);
+  const midCount = Number(counts[1]);
+  const safeCount = Number(counts[0]);
+  const activePreset = presetOf(paint);
+  // a risky win gets the heavy landing shake; the wheel reads the last result
+  const heavyShake = !!result && result.won && result.tier === 2;
 
   // LCD: idle → RTP + max mult; spinning → status; done → result
   useEffect(() => {
@@ -330,6 +362,8 @@ export default function App() {
     setRound(null);
     setPendingSegment(null);
     sfx.land();
+    // a risky win lands harder: short taps on a plain land, a small pattern on a win
+    buzz(won && outcome.tier === 2 ? [18, 40, 90] : 12);
     window.setTimeout(() => sfx.sting(outcome.tier, won, outcome.multiplierWad >= 4n), 140);
 
     // near-miss drama: a losing spin that stopped directly NEXT to a risky wedge
@@ -361,6 +395,10 @@ export default function App() {
     if (outcome.tier === 2) recordMission('riskyLands');
     if (won && outcome.tier === 2) recordMission('riskyWins');
     if (outcome.prize.rarity === 'legendary') recordMission('legendaryPrizes');
+    // a bold paint is one with risky covering at least 40% of the wheel, so
+    // the objective asks the player to actually shape the paytable
+    const landedCounts = tierCounts(r.paint);
+    if (landedCounts[2] * 5n >= BigInt(r.paint.segmentCount) * 2n) recordMission('boldSpins');
 
     // session stats, streaks, milestones (cosmetic, client-only)
     const winAmount = formatUnits(outcome.payout, decimals);
@@ -475,15 +513,39 @@ export default function App() {
     }
   }
 
+  function refusePaint(note: string) {
+    sfx.deny();
+    setPaintNote(note);
+    window.clearTimeout(paintNoteTimer.current);
+    paintNoteTimer.current = window.setTimeout(() => setPaintNote(null), 2400);
+  }
+
   function paintSegment(i: number) {
     if (round) return;
+    const tiers = [...paint.tiers];
+    tiers[i] = paintTier;
+    const np = { ...paint, tiers };
+    if (!isLegalPaint(np)) {
+      // legal means at least one risky slice, at least one cushion, and never
+      // more than half the wheel risky. Say so instead of eating the tap.
+      const counts = tierCounts(paint);
+      refusePaint(counts[2] * 2n >= BigInt(paint.segmentCount)
+        ? 'Risky can be at most half the wheel. Paint a risky slice back to Mid or Safe first.'
+        : 'The wheel needs at least one Risky slice and one Safe or Mid slice.');
+      return;
+    }
     sfx.click();
-    setPaint(p => {
-      const tiers = [...p.tiers];
-      tiers[i] = paintTier;
-      const np = { ...p, tiers };
-      return isLegalPaint(np) ? np : p; // keep wheel always legal
-    });
+    setPaint(np);
+    setPainted(true);
+    if (paintNote) setPaintNote(null);
+  }
+
+  function applyPreset(id: PaintPresetId) {
+    if (round) return;
+    sfx.click();
+    setPaint(presetPaint(paint.segmentCount, id));
+    setPainted(true);
+    if (paintNote) setPaintNote(null);
   }
 
   function cycleSegmentCount() {
@@ -594,6 +656,21 @@ export default function App() {
   const liveryUnlocked = unlockedLiveries(collection);
   const shelf = shelfStats(collection);
   const album = albumProgress(collection);
+  // every part of the loop has been played at least once
+  const firstLoopComplete = painted && stats.spins > 0 && shelf.owned > 0;
+
+  // The first-session checklist retires itself once the loop has been played.
+  // It stays up for a beat after the third tick so the player sees it complete.
+  useEffect(() => {
+    if (firstLoopDone || !firstLoopComplete) return;
+    const t = window.setTimeout(() => {
+      setFirstLoopDone(true);
+      try { localStorage.setItem('fg_first_loop_v1', '1'); } catch { /* private mode */ }
+      setLcd('★ FIRST LOOP DONE ★');
+      sfx.fanfare();
+    }, 1800);
+    return () => window.clearTimeout(t);
+  }, [firstLoopDone, firstLoopComplete]);
   const doneToday = missions.filter(m => missionProgress(m, dayState).done).length;
 
   if (mode === 'pending') {
@@ -668,9 +745,9 @@ export default function App() {
         aria-labelledby="tab-play"
         hidden={tab !== 'play'}
       >
-        <section className="panel">
+        <section className={`panel${paintNote ? ' nope' : ''}`}>
           <div className="panel-title">
-            <h2>The Wheel · paint it, then spin</h2>
+            <h2>The paytable is yours · paint, then spin</h2>
             <span className="hint">tap a slice to paint · {paint.segmentCount} slices</span>
           </div>
 
@@ -683,6 +760,7 @@ export default function App() {
             interactive={!round}
             onTickSound={(s01) => sfx.tick(s01)}
             onLand={onWheelLand}
+            heavyShake={heavyShake}
           />
 
           <div className="tier-row">
@@ -698,6 +776,60 @@ export default function App() {
               </button>
             ))}
           </div>
+
+          {/* Fast starts: a legal, meaningful paint in one tap, so nobody has
+              to learn a rule before they can play well. */}
+          <div className="paint-presets" role="group" aria-label="ready-made paints">
+            <span className="pp-label">Stake shape</span>
+            {PAINT_PRESETS.map(p => (
+              <button
+                key={p.id}
+                type="button"
+                title={p.hint}
+                disabled={!!round}
+                className={`preset${activePreset === p.id ? ' on' : ''}`}
+                onClick={() => applyPreset(p.id)}
+              >
+                {p.label}
+              </button>
+            ))}
+            <span className="pp-state">{activePreset ? '' : 'custom'}</span>
+          </div>
+
+          {/* The trade, made visible: as risky takes more of the wheel, each
+              risky slice pays less. This is the whole game in one line. */}
+          <div className="paint-readout">
+            <span><b>{riskyCount}</b> of {paint.segmentCount} risky</span>
+            <span>risky pays <b>{formatMultiplier(prices.risky)}</b></span>
+            <span>mid <b>{formatMultiplier(prices.mid)}</b></span>
+            <span className="stamp">RTP 96.00%</span>
+          </div>
+
+          {paintNote && (
+            <div className="paint-note" role="status">{paintNote}</div>
+          )}
+
+          <details className="fair-deets">
+            <summary>Why this stays fair</summary>
+            <ul>
+              <li>
+                You set the prices. Take more of the wheel risky and each risky slice pays
+                less: the return stays fixed, so no paint is better than another.
+              </li>
+              <li>
+                Safe {safeCount} pays {formatMultiplier(prices.safe)} · Mid {midCount} pays{' '}
+                {formatMultiplier(prices.mid)} · Risky {riskyCount} pays {formatMultiplier(prices.risky)}
+              </li>
+              <li>Expected return is 96.00% on every legal paint, by construction, not on average.</li>
+              <li>One VRF word per spin, rejection-sampled, so every slice is exactly as likely as every other.</li>
+              <li>
+                <a href="https://github.com/thesithunyein/fairground/blob/main/docs/MATH.md" target="_blank" rel="noreferrer">
+                  The declared maths and the verifier that proves it
+                </a>{' '}
+                · <code>npm run verify:rtp</code>
+              </li>
+            </ul>
+          </details>
 
           {stats.spins > 0 && (
             <div className="stats-strip">
@@ -782,6 +914,17 @@ export default function App() {
                 ? <span>WIN <CountUpTo value={parseFloat(formatUnits(result.payout, decimals))} /> {symbol} · {result.tier === 2 ? 'RISKY' : result.tier === 1 ? 'MID' : 'SAFE'} paid</span>
                 : <span>{nearMiss ? 'SO CLOSE · landed next to risky. ' : `No win · landed ${result.tier === 2 ? 'risky' : result.tier === 1 ? 'mid' : 'safe'}. `}Repaint and go again.</span>
             }            </div>
+          )}
+
+          {/* First-session guidance: three ticks and it retires for good, so a
+              newcomer always knows what to do next without reading anything. */}
+          {!firstLoopDone && (
+            <div className="first-loop">
+              <span className="fl-title">First loop</span>
+              <span className={`fl-step${painted ? ' done' : ''}`}>{painted ? '✓' : '1'} Paint a slice</span>
+              <span className={`fl-step${stats.spins > 0 ? ' done' : ''}`}>{stats.spins > 0 ? '✓' : '2'} Spin</span>
+              <span className={`fl-step${shelf.owned > 0 ? ' done' : ''}`}>{shelf.owned > 0 ? '✓' : '3'} Collect a prize</span>
+            </div>
           )}
 
           {/* A preview of the album, one tap from the full page. The prizes
