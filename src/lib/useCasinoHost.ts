@@ -15,6 +15,10 @@ export type HostConnection = {
 };
 
 const HANDSHAKE_TIMEOUT_MS = 1200;
+/** Host handshake resolved but no state arrived: fall back to demo (some
+ *  embeds resolve postMessage without ever calling setState). A late
+ *  snapshot still upgrades back to host mode. */
+const SNAPSHOT_TIMEOUT_MS = 4000;
 
 /**
  * Guest side of the casino bridge. If the handshake doesn't resolve quickly
@@ -28,14 +32,20 @@ export function useCasinoHost(): HostConnection {
   const [mode, setMode] = useState<'pending' | 'host' | 'demo'>('pending');
   const modeRef = useRef(mode);
   modeRef.current = mode;
+  const hostApiRef = useRef<HostApiV1 | null>(null);
 
   useEffect(() => {
     let mounted = true;
+    let gotState = false;
 
     const guestMethods: GuestApiV1 = {
       async setState(nextSnapshot) {
         if (!mounted) return;
+        gotState = true;
         setSnapshot(nextSnapshot);
+        // real host state arrived → (re)enter host mode even if we had
+        // fallen back to demo while waiting for it
+        if (hostApiRef.current) setMode('host');
       },
     };
 
@@ -44,6 +54,7 @@ export function useCasinoHost(): HostConnection {
     void connection.promise
       .then(parent => {
         if (!mounted) return;
+        hostApiRef.current = parent;
         setHostApi(parent);
         setMode('host');
       })
@@ -55,9 +66,17 @@ export function useCasinoHost(): HostConnection {
       if (mounted && modeRef.current === 'pending') setMode('demo');
     }, HANDSHAKE_TIMEOUT_MS);
 
+    const snapshotTimer = window.setTimeout(() => {
+      // handshake resolved but the host never pushed state — some embeds do
+      // postMessage without a real host behind them. Play demo; a late
+      // setState still flips us back to host mode.
+      if (mounted && modeRef.current === 'host' && !gotState) setMode('demo');
+    }, SNAPSHOT_TIMEOUT_MS);
+
     return () => {
       mounted = false;
       window.clearTimeout(timer);
+      window.clearTimeout(snapshotTimer);
       connection.destroy();
     };
   }, []);

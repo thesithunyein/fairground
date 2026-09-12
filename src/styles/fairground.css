@@ -450,3 +450,87 @@ body {
   font-family: var(--font-pixel);
   font-size: 15px; color: var(--green);
 }
+
+/* ── wallet state note (host mode) ───────────────────────────────── */
+.wallet-note {
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--paper-gold);
+  box-shadow: 3px 3px 0 var(--ink);
+  padding: 10px 12px;
+  font-size: 12px; font-weight: 800; color: var(--ink);
+  text-align: center;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MOBILE — phones first for chain.wtf players (≤ 640px).
+   Same design language; wheel up top, thumb-zone bet bar, ≥44px touch.
+   ═══════════════════════════════════════════════════════════════════ */
+html, body { overflow-x: clip; } /* phones: never scroll sideways */
+
+@media (max-width: 640px) {
+  .app { padding: 10px 10px 96px; } /* bottom padding clears the sticky bar */
+
+  .top {
+    flex-direction: row;
+    flex-wrap: wrap; /* ultra-narrow (320px): bank chip wraps under the brand */
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .brand-name { font-size: 17px; }
+  .brand-sub { font-size: 9px; }
+  .chips { gap: 6px; margin-left: auto; }
+  .chip { min-height: 44px; padding: 5px 9px; font-size: 13px; }
+  .chip .lbl { font-size: 8px; }
+  .chip.lcd { display: none; } /* redundant on phones — the LCD panel below shows status */
+  .icon-btn { width: 44px; height: 44px; }
+  .overlay-badge { position: static; align-self: center; margin-bottom: 8px; }
+
+  .panel { padding: 11px; border-radius: 14px; }
+  .panel-title h2 { font-size: 11px; letter-spacing: 0.12em; }
+  .panel-title .hint { font-size: 10px; }
+
+  .wheel-svg { width: min(100%, 340px); }
+
+  .tier-row { gap: 6px; }
+  .tier-pill { min-height: 44px; padding: 9px 10px; font-size: 13px; gap: 6px; }
+  .tier-pill .mult { font-size: 12px; }
+
+  .controls { gap: 9px; }
+  .lcd-panel { padding: 10px 12px; }
+  .bet-block .row { gap: 6px; }
+  .half-double { width: 48px; height: 48px; font-size: 16px; }
+  .bet-input-wrap input { height: 48px; font-size: 17px; } /* ≥16px kills iOS zoom */
+  .bet-meta { font-size: 11px; gap: 6px; }
+
+  .spin-btn {
+    position: fixed;
+    left: 10px; right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    z-index: 40;
+    padding: 16px 18px;
+    font-size: 21px;
+    border-radius: 16px;
+    box-shadow: 0 4px 0 var(--ink), 0 10px 24px rgba(20, 20, 20, 0.28);
+  }
+  .spin-btn:not(:disabled):active { transform: translateY(2px); box-shadow: 0 2px 0 var(--ink); }
+  .spin-btn.attract { animation: attractMobile 1.6s ease-in-out infinite; }
+  @keyframes attractMobile {
+    0%, 100% { box-shadow: 0 4px 0 var(--ink), 0 10px 24px rgba(20, 20, 20, 0.28); }
+    50% { box-shadow: 0 4px 0 var(--ink), 0 10px 24px rgba(20, 20, 20, 0.28), 0 0 0 7px rgba(47, 107, 255, 0.2); }
+  }
+
+  .shelf-row { gap: 6px; }
+  .livery-dot { width: 34px; height: 34px; }
+  .fair-note { flex-direction: column; gap: 4px; font-size: 10px; text-align: center; }
+  .overlay-badge { font-size: 9px; padding: 4px 9px; }
+  .prize-toast { width: min(92vw, 300px); }
+}
+
+/* short landscape phones (e.g. 844×390): keep SPIN reachable, shrink wheel */
+@media (max-width: 640px) and (orientation: landscape) {
+  .app { padding-bottom: 84px; }
+  .wheel-svg { width: min(46vh, 300px); }
+}

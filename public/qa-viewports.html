@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>FAIRGROUND — viewport QA</title>
+<style>
+  body { margin: 0; background: #e8e4d8; font: 12px/1.4 monospace; padding: 12px; }
+  h3 { margin: 14px 0 4px; }
+  .frame { border: 3px solid #141414; border-radius: 10px; overflow: hidden; background: #fff; box-shadow: 4px 4px 0 rgba(20,20,20,.3); }
+  iframe { border: 0; display: block; }
+  .phone { width: 390px; height: 700px; }
+  .phone iframe { width: 390px; height: 700px; }
+  .gallery { width: 800px; height: 600px; }
+  .gallery iframe { width: 800px; height: 600px; }
+</style>
+</head>
+<body>
+  <h3>PHONE — 390 × 700 (sticky SPIN bar should be visible in thumb zone)</h3>
+  <div class="frame phone"><iframe src="/" title="phone"></iframe></div>
+  <h3>GALLERY CARD — 800 × 600 (jam embed size)</h3>
+  <div class="frame gallery"><iframe src="/" title="gallery"></iframe></div>
+</body>
+</html>

@@ -7,6 +7,7 @@ import {
   priceWheel,
   formatMultiplier,
   isLegalPaint,
+  decodeGameData,
   demoRandomness,
   demoSeed,
   type Paint,
@@ -27,6 +28,7 @@ import {
 import * as sfx from './lib/sound';
 
 const DEMO_BALANCE_START = 1000_000000n; // 1000.00 (6 decimals)
+const PHASE_WAITING_RANDOMNESS = 2;
 const PHASE_SETTLED = 3;
 const PHASE_FORFEITED = 4;
 const PHASE_CANCELLED = 5;
@@ -55,6 +57,16 @@ function parseUnits(input: string, decimals: number): bigint {
   const [int, frac = ''] = trimmed.split('.');
   const fracPadded = (frac + '0'.repeat(decimals)).slice(0, decimals);
   return BigInt(int || '0') * 10n ** BigInt(decimals) + BigInt(fracPadded || '0');
+}
+
+function friendlyBetError(e: unknown, symbol: string): string {
+  const raw = e instanceof Error ? e.message : String(e);
+  const m = raw.match(/Max bet right now: ([\d.]+)/);
+  if (m) return `Max bet right now: ${m[1]} ${symbol}`;
+  if (/BetRiskExceedsLimit|ReservedProfit|reserved profit/i.test(raw)) return "The house can't cover a bet that size right now — go smaller.";
+  if (/user rejected|UserRejected|denied/i.test(raw)) return 'Cancelled.';
+  if (raw.length > 90) return 'Bet failed — try again.';
+  return raw;
 }
 
 function formatUnits(value: bigint, decimals: number): string {
@@ -88,6 +100,12 @@ export default function App() {
   const symbol = demo ? 'chUSD' : snapshot?.token?.symbol ?? 'chUSD';
 
   const walletReady = demo || snapshot?.wallet?.status === 'ready';
+  const walletIssue = !demo && snapshot && snapshot.wallet.status !== 'ready' ? snapshot.wallet.status : null;
+  const walletMessage =
+    walletIssue === 'setup-required' ? 'Set up your smart vault in the host menu, then come back to play for real.' :
+    walletIssue === 'disconnected' ? 'Connect your wallet in the host menu to play for real.' :
+    walletIssue === 'session-key-mismatch' ? 'Session expired — reconnect in the host menu.' :
+    walletIssue ? 'Wallet not ready — open the host menu.' : null;
   const rawBalance = demo ? balance : BigInt(snapshot?.balances?.smartVaultBalance ?? '0');
 
   // max wager from live platform limits (heaviest legal paint ≈ 12.37×)
@@ -132,6 +150,23 @@ export default function App() {
         void hostApi?.revealOutcome({ sessionId: round.sessionKey! }).catch(() => {});
       };
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapshot, round, demo]);
+
+  // session resume: a reload mid-VRF-wait recovers the in-flight round from
+  // the host's snapshot — the wheel animates to its segment when VRF lands.
+  useEffect(() => {
+    if (demo || !snapshot || round) return;
+    const row = snapshot.sessions.items.find(
+      s => s.gameAddress === snapshot.integration.gameAddress && !s.isSettled && s.phase === PHASE_WAITING_RANDOMNESS,
+    );
+    if (!row) return;
+    const resumedPaint = row.raw?.gameData ? decodeGameData(row.raw.gameData) : null;
+    const wager = BigInt(row.stake ?? row.wager ?? '0');
+    if (!resumedPaint || wager <= 0n) return;
+    setPaint(resumedPaint);
+    setRound({ wager, paint: resumedPaint, sessionKey: row.sessionKey, sessionId: row.sessionId, pending: false });
+    setLcd('RESUMED - WAITING FOR VRF...');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapshot, round, demo]);
 
@@ -216,7 +251,7 @@ export default function App() {
       }
     } catch (e) {
       setRound(null);
-      setErr(e instanceof Error ? e.message : 'Bet failed — try again.');
+      setErr(friendlyBetError(e, symbol));
     }
   }
 
@@ -368,8 +403,12 @@ export default function App() {
             disabled={!!round || !walletReady}
             onClick={placeBet}
           >
-            {round ? (round.sessionId || demo ? 'SPINNING…' : 'SIGNING…') : walletReady ? 'SPIN' : 'WALLET NOT READY'}
+            {round ? (round.sessionId || demo ? 'SPINNING…' : 'SIGNING…') : walletReady ? 'SPIN' : walletIssue === 'disconnected' ? 'CONNECT WALLET' : 'WALLET NOT READY'}
           </button>
+
+          {walletMessage && !err && (
+            <div className="wallet-note" role="status">{walletMessage}</div>
+          )}
 
           {err && (
             <div className="result-banner lose" role="alert">{err}</div>
