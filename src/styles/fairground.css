@@ -175,6 +175,130 @@ body {
   .stage { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* ── screens: PLAY, COLLECT, DAILY ──────────────────────────────────────
+   Three screens instead of one long page, the way a game app is laid out.
+   Only the active one is in the document, so nothing is ever "below the
+   fold" on a phone: the nav is the only way to move, and every screen
+   starts at the top. */
+.screens {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+}
+.screen {
+  width: min(980px, 100%);
+  /* opacity only, no transform: a transformed ancestor becomes the containing
+     block for `position: fixed` descendants, which would unpin the phone's
+     SPIN bar from the viewport and leave it scrolling with the content */
+  animation: screenIn 0.22s ease both;
+}
+.screen.collect, .screen.daily { display: flex; flex-direction: column; gap: 14px; }
+/* our own `display` would beat the user agent's [hidden] rule without this */
+.screen[hidden] { display: none !important; }
+@keyframes screenIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* a short explanation at the top of a screen, in the design's voice */
+.screen-lead {
+  margin: 0 0 11px;
+  padding-left: 9px;
+  border-left: 3px solid var(--line);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+/* the screen switcher: segmented control on desktop, bottom bar on phones */
+.tabnav {
+  display: inline-flex;
+  gap: 5px;
+  padding: 5px;
+  width: min(980px, 100%);
+  background: var(--card);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+.tab {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 10px;
+  background: none;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  color: var(--ink-soft);
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.tab .t-icon { font-size: 14px; line-height: 1; }
+.tab .t-badge {
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: var(--paper-2);
+  color: var(--ink-soft);
+}
+.tab:not(.on):hover { background: var(--paper); color: var(--ink); }
+.tab.on {
+  background: var(--blue);
+  border-color: var(--ink);
+  color: #fff;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+.tab.on .t-badge { background: rgba(255, 255, 255, 0.22); color: #fff; }
+
+/* the recent-spins readout beside the LCD */
+.recent { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; padding: 0 2px; }
+.recent .r-lbl {
+  font-family: var(--font-pixel); font-size: 8px; letter-spacing: 0.1em;
+  color: var(--ink-soft);
+}
+.recent .r-empty { font-size: 10.5px; color: var(--ink-faint); }
+.r-chip {
+  font-family: var(--font-pixel); font-size: 9px;
+  padding: 3px 6px; border-radius: 6px;
+  border: 2px solid var(--line); background: var(--paper); color: var(--ink-soft);
+}
+.r-chip.t0 { border-color: var(--green); }
+.r-chip.t1 { border-color: var(--gold); }
+.r-chip.t2 { border-color: var(--red); }
+.r-chip.win { background: var(--paper-gold); border-color: var(--ink); color: var(--ink); }
+
+/* the album preview on PLAY: a glance, with the full page one tap away */
+.shelf-jump {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  width: 100%;
+  padding: 11px;
+  text-align: left;
+  background: var(--card);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+}
+.shelf-jump:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
+.sj-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.sj-label { font-family: var(--font-pixel); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
+.sj-go { font-size: 10px; font-weight: 900; letter-spacing: 0.04em; color: var(--blue-deep); }
+.shelf-row.compact .prize-cell { box-shadow: 2px 2px 0 var(--ink); border-radius: 8px; }
+.shelf-row.compact .prize-cell:not(.owned) { box-shadow: none; }
+.shelf-row.compact .rarity-tag { display: none; }
+
 .panel {
   background: var(--card);
   border: 2px solid var(--ink);
@@ -548,7 +672,7 @@ body {
   font-family: var(--font-pixel); font-size: 9px; letter-spacing: 0.06em;
   border: 2px solid var(--ink); border-radius: 7px;
   background: var(--paper-gold); color: var(--ink);
-  padding: 3px 8px; box-shadow: 2px 2px 0 var(--ink); cursor: pointer;
+  padding: 3px 8px; box-shadow: 2px 2px 0 var(--ink);
 }
 .album-open:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
 
@@ -580,7 +704,9 @@ body {
 .album-set-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 11px; }
 .album-set-head b { letter-spacing: 0.04em; }
 .album-set-head span { color: var(--ink-soft); font-weight: 800; text-align: right; }
-.album-set .shelf-row { grid-template-columns: repeat(6, 1fr); }
+/* album tiles have a size ceiling: six stretched squares on a wide screen
+   read as empty boxes around a small sprite */
+.album-set .shelf-row { grid-template-columns: repeat(6, minmax(0, 108px)); justify-content: center; }
 
 /* ── daily booth: missions and the seven rung ladder ────────────────── */
 .mission-list { display: flex; flex-direction: column; gap: 7px; }
@@ -751,7 +877,27 @@ html, body { overflow-x: clip; } /* phones: never scroll sideways */
 }
 
 @media (max-width: 640px) {
-  .app { padding: 10px 10px 96px; } /* bottom padding clears the sticky bar */
+  /* bottom padding clears the fixed SPIN bar and the tab bar under it */
+  .app { padding: 10px 10px calc(154px + env(safe-area-inset-bottom, 0px)); }
+
+  /* the nav becomes the phone's bottom bar, thumb reachable */
+  .tabnav {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 60;
+    width: auto;
+    gap: 4px;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+    border-width: 2px 0 0;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -2px 0 rgba(20, 20, 20, 0.06);
+  }
+  .tab { flex-direction: column; gap: 2px; padding: 6px 4px; font-size: 9px; min-height: 50px; }
+  .tab .t-icon { font-size: 17px; }
+  .tab.on { box-shadow: none; }
+
+  /* on a phone the album tiles fill the width again */
+  .album-set .shelf-row { grid-template-columns: repeat(6, minmax(0, 1fr)); justify-content: stretch; }
 
   .top {
     flex-direction: row;
@@ -793,7 +939,8 @@ html, body { overflow-x: clip; } /* phones: never scroll sideways */
        over left/right and push the button 10px past the right edge */
     width: auto;
     left: 10px; right: 10px;
-    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    /* sits above the tab bar, which owns the bottom edge of the screen */
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
     z-index: 40;
     padding: 16px 18px;
     font-size: 21px;

@@ -53,6 +53,20 @@ const DEMO_BALANCE_START = 1000_000000n; // 1000.00 (6 decimals)
 // capture mode: ?clean=1 hides the demo ticket stamp while recording promo footage
 // (cosmetic only: demo play itself is unchanged, and the normal page keeps the stamp)
 const CLEAN_MODE = new URLSearchParams(window.location.search).has('clean');
+/**
+ * The booth is three screens rather than one long page, the way a real game
+ * app is laid out: PLAY holds the table and the bet, COLLECT holds the album,
+ * DAILY holds the objectives and the ladder. Only the active screen is in the
+ * document, so a phone never has to scroll past one screen to reach another.
+ */
+type ScreenId = 'play' | 'collect' | 'daily';
+
+const SCREENS: { id: ScreenId; label: string; icon: string }[] = [
+  { id: 'play', label: 'Play', icon: '🎡' },
+  { id: 'collect', label: 'Collect', icon: '🧸' },
+  { id: 'daily', label: 'Daily', icon: '🎟️' },
+];
+
 const PHASE_WAITING_RANDOMNESS = 2;
 const PHASE_SETTLED = 3;
 const PHASE_FORFEITED = 4;
@@ -198,7 +212,10 @@ export default function App() {
   const [spinNonce, setSpinNonce] = useState(0);
   const [pendingSegment, setPendingSegment] = useState<number | null>(null);
   const [collection, setCollection] = useState<Collection>(() => loadCollection());
-  const [albumOpen, setAlbumOpen] = useState(false);
+  // which screen is showing. Starts on the table, because that is the game.
+  const [tab, setTab] = useState<ScreenId>('play');
+  // the table readout beside the LCD: the last few settled spins
+  const [history, setHistory] = useState<{ tier: number; won: boolean; x: string }[]>([]);
   // today's objectives, the run of banked days, and the ladder they climb
   const [dayState, setDayState] = useState<DailyState>(() => loadDaily(dayKey()));
   const [ladder, setLadder] = useState<LadderState>(() => loadLadder());
@@ -336,6 +353,10 @@ export default function App() {
 
     // daily objectives (cosmetic only, see lib/missions.ts)
     recordMission('spins');
+    setHistory(prev => [
+      { tier: outcome.tier, won, x: formatMultiplier(outcome.multiplierWad) },
+      ...prev,
+    ].slice(0, 8));
     if (won) recordMission('wins');
     if (outcome.tier === 2) recordMission('riskyLands');
     if (won && outcome.tier === 2) recordMission('riskyWins');
@@ -535,13 +556,12 @@ export default function App() {
 
   // The instructions are a centered modal now, so they stay until the player
   // closes them: no timer racing a slow reader. Escape closes, and the page
-  // behind the backdrop is held still while it is open. The album shares it.
+  // behind the backdrop is held still while it is open.
   useEffect(() => {
-    if (!howOpen && !albumOpen) return;
+    if (!howOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      if (albumOpen) setAlbumOpen(false);
-      else dismissHow();
+      dismissHow();
     };
     window.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
@@ -550,7 +570,12 @@ export default function App() {
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [howOpen, albumOpen]);
+  }, [howOpen]);
+
+  // switching screens lands at the top, the way a new page would
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [tab]);
 
   function shareWheel() {
     try { void navigator.clipboard.writeText(window.location.href); } catch { /* ignore */ }
@@ -611,7 +636,38 @@ export default function App() {
         </div>
       </header>
 
-      <main className="stage">
+      {/* One nav for both layouts: a segmented control under the header on
+          desktop, a fixed bottom bar on phones. The badges are the reason to
+          visit the other two screens, so they carry live progress. */}
+      <nav className="tabnav" role="tablist" aria-label="screens">
+        {SCREENS.map(s => (
+          <button
+            key={s.id}
+            type="button"
+            role="tab"
+            id={`tab-${s.id}`}
+            aria-selected={tab === s.id}
+            aria-controls={`screen-${s.id}`}
+            className={`tab${tab === s.id ? ' on' : ''}`}
+            onClick={() => { sfx.click(); setTab(s.id); }}
+          >
+            <span className="t-icon" aria-hidden="true">{s.icon}</span>
+            <span className="t-label">{s.label}</span>
+            <span className="t-badge">
+              {s.id === 'collect' ? `${shelf.owned}/${shelf.total}` : s.id === 'daily' ? `${doneToday}/3` : 'READY'}
+            </span>
+          </button>
+        ))}
+      </nav>
+
+      <main className="screens">
+      <section
+        className="screen stage"
+        id="screen-play"
+        role="tabpanel"
+        aria-labelledby="tab-play"
+        hidden={tab !== 'play'}
+      >
         <section className="panel">
           <div className="panel-title">
             <h2>The Wheel · paint it, then spin</h2>
@@ -659,6 +715,17 @@ export default function App() {
               {round ? '● SPINNING' : result ? (result.won ? `▲ ${formatUnits(result.payout, decimals)} ${symbol}` : '▼ NO WIN') : '■ PLACE YOUR BET'}
             </div>
             <button className="icon-btn" style={{ boxShadow: 'none', background: '#2a2d2b', borderColor: '#2a2d2b', color: '#7dffb2' }} onClick={autoRepaint} title="random legal paint">🎲</button>
+          </div>
+
+          {/* the last few spins beside the LCD: the table readout a player
+              expects, and a reminder that you can paint and go again */}
+          <div className="recent" aria-label="recent spins">
+            <span className="r-lbl">LAST</span>
+            {history.length === 0
+              ? <span className="r-empty">no spins yet</span>
+              : history.map((h, i) => (
+                <span key={i} className={`r-chip t${h.tier}${h.won ? ' win' : ''}`}>{h.x}</span>
+              ))}
           </div>
 
           <div className="panel bet-block">
@@ -714,45 +781,73 @@ export default function App() {
               {result.won
                 ? <span>WIN <CountUpTo value={parseFloat(formatUnits(result.payout, decimals))} /> {symbol} · {result.tier === 2 ? 'RISKY' : result.tier === 1 ? 'MID' : 'SAFE'} paid</span>
                 : <span>{nearMiss ? 'SO CLOSE · landed next to risky. ' : `No win · landed ${result.tier === 2 ? 'risky' : result.tier === 1 ? 'mid' : 'safe'}. `}Repaint and go again.</span>
-            }
-            </div>
+            }            </div>
           )}
 
+          {/* A preview of the album, one tap from the full page. The prizes
+              drop while you spin, so this is where the fresh-prize pulse is
+              seen; the album itself lives on the COLLECT screen. */}
+          <button className="shelf-jump" type="button" onClick={() => { sfx.click(); setTab('collect'); }}>
+            <span className="sj-head">
+              <span className="sj-label">Your shelf</span>
+              <span className="sj-go">{shelf.owned}/{shelf.total} · ALBUM ›</span>
+            </span>
+            <span className="shelf-row compact">
+              {[0, 1, 2, 3, 4, 5].map(toy => (
+                <ShelfCell key={toy} toy={toy} collection={collection} fresh={prizeToast?.fresh && prizeToast.id === toy} />
+              ))}
+            </span>
+          </button>
         </section>
+      </section>
 
-        {/* The album and the daily booth are stage items, not controls: as the
-            last children of `.controls` they made that column far taller than
-            the wheel, and the wheel panel stretched to match it, leaving a
-            large empty card under the wheel. As a second grid row they sit
-            beside each other instead. */}
+      {/* COLLECT: the whole album, every prize grouped into its set, each set
+          naming the livery it pays out, plus the season stamp when all three
+          are done. Progress is cosmetic and provably cannot move the odds. */}
+      <section
+        className="screen collect"
+        id="screen-collect"
+        role="tabpanel"
+        aria-labelledby="tab-collect"
+        hidden={tab !== 'collect'}
+      >
         <div className="panel">
           <div className="panel-title">
-            <h2>Prize Album</h2>
-            <button className="album-open" type="button" onClick={() => { sfx.click(); setAlbumOpen(true); }}>
-              SEASON 1 · {shelf.owned}/{shelf.total}
-            </button>
+            <h2>Prize Album · Season 1</h2>
+            <span className="album-open">
+              {album.have}/{album.total} collected
+            </span>
           </div>
 
           <div className="season-bar"><i style={{ width: `${(album.have / album.total) * 100}%` }} /></div>
 
-          <div className="shelf-row">
-            {[0, 1, 2, 3, 4, 5].map(toy => (
-              <ShelfCell key={toy} toy={toy} collection={collection} fresh={prizeToast?.fresh && prizeToast.id === toy} />
-            ))}
-          </div>
+          <p className="screen-lead">
+            Every spin drops a carnival prize. Fill all six of a set and the booth unlocks
+            its livery. Collecting never touches the odds: RTP stays 96% every spin.
+          </p>
 
-          <div className="set-row">
-            {album.sets.map(({ set, have, total, done }) => (
-              <div
-                key={set.id}
-                className={`set-chip${done ? ' done' : ''}`}
-                title={`${set.label}: ${have}/${total}, complete it for the ${set.rewardLabel}`}
-              >
-                <span className="s-name">{set.label}</span>
-                <span className="s-count">{done ? '✓' : `${have}/${total}`}</span>
+          {album.sets.map(({ set, have, total, done }) => (
+            <div key={set.id} className="album-set">
+              <div className="album-set-head">
+                <b>{set.label}</b>
+                <span>{done ? `complete · ${set.rewardLabel} unlocked` : `${have}/${total} · unlocks the ${set.rewardLabel}`}</span>
               </div>
-            ))}
-          </div>
+              <div className="shelf-row">
+                {TOY_NAMES.map((name, toy) => {
+                  const key = `${name}:${set.rarity}`;
+                  const count = collection.counts[key] ?? 0;
+                  return (
+                    <div key={key} className={`prize-cell ${set.rarity}${count > 0 ? ' owned' : ''}`}>
+                      {count > 0
+                        ? <PrizeSprite toy={toy} rarity={set.rarity} size={38} />
+                        : <span style={{ opacity: 0.25, fontSize: 15 }}>?</span>}
+                      {count > 1 && <span className="count">{count}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
 
           <div className="livery-row">
             {LIVERIES.map(l => {
@@ -780,12 +875,28 @@ export default function App() {
             <span className="stamp">96% RTP always</span>
           </div>
         </div>
+      </section>
 
+      {/* DAILY: three objectives that rotate at midnight UTC, and the seven rung
+          ladder they feed. Stamps and one wheel skin, never a payout. */}
+      <section
+        className="screen daily"
+        id="screen-daily"
+        role="tabpanel"
+        aria-labelledby="tab-daily"
+        hidden={tab !== 'daily'}
+      >
         <div className="panel">
           <div className="panel-title">
             <h2>Daily Booth</h2>
             <span className="hint">{doneToday}/3 today · day {ladder.day || 1}</span>
           </div>
+
+          <p className="screen-lead">
+            Three objectives, fresh at midnight UTC. Bank all three and the run climbs a
+            rung: seven days in a row earns the gilded wheel. Stamps are cosmetic, so
+            none of this can change a wager, a multiplier or a payout.
+          </p>
 
           <div className="mission-list">
             {missions.map(m => {
@@ -818,67 +929,13 @@ export default function App() {
             <span className="stamp">{ladder.badges.length} stamps</span>
           </div>
         </div>
+      </section>
       </main>
 
       <footer className="fair-note">
         <span>Provably fair: exactly-uniform wheel · VRF randomness · paytable recomputed on-chain from YOUR paint</span>
         <span className="stamp">DECLARED RTP 96% · HOUSE EDGE 4%</span>
       </footer>
-
-      {/* The album: all 18 prizes grouped into their three sets, each with the
-          livery it pays out, plus the season stamp once every set is done. */}
-      {albumOpen && (
-        <div className="howto-backdrop" onClick={() => setAlbumOpen(false)}>
-          <div
-            className="howto album"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="album-title"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="howto-head">
-              <h3 id="album-title">PRIZE ALBUM · SEASON 1</h3>
-              <button className="howto-x" type="button" onClick={() => setAlbumOpen(false)} aria-label="close album" autoFocus>✕</button>
-            </div>
-
-            <div className="album-lead">
-              <span>THE OPENING SEASON</span>
-              <span className="stamp">{album.have}/{album.total} collected</span>
-            </div>
-
-            {album.sets.map(({ set, have, total, done }) => (
-              <div key={set.id} className="album-set">
-                <div className="album-set-head">
-                  <b>{set.label}</b>
-                  <span>{done ? `complete · ${set.rewardLabel} unlocked` : `${have}/${total} · unlocks the ${set.rewardLabel}`}</span>
-                </div>
-                <div className="shelf-row">
-                  {TOY_NAMES.map((name, toy) => {
-                    const key = `${name}:${set.rarity}`;
-                    const count = collection.counts[key] ?? 0;
-                    return (
-                      <div key={key} className={`prize-cell ${set.rarity}${count > 0 ? ' owned' : ''}`}>
-                        {count > 0
-                          ? <PrizeSprite toy={toy} rarity={set.rarity} size={30} />
-                          : <span style={{ opacity: 0.25, fontSize: 15 }}>?</span>}
-                        {count > 1 && <span className="count">{count}</span>}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-
-            <div className="howto-foot">
-              <b>Collecting changes the booth, never the odds.</b> RTP stays 96% for every legal
-              paint, with or without the album.{' '}
-              {album.complete && collection.stamps.album
-                ? `Season 1 sealed on ${formatStamp(collection.stamps.album)}.`
-                : 'Fill all three sets to seal the season.'}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* How to play, centered over the booth. A newcomer should not have to
           scroll to find out what the game is, so this is a modal on arrival
@@ -925,6 +982,12 @@ export default function App() {
               <b>RTP stays 96% for every legal paint.</b> Paint it gentle or paint it wild: the maths is
               identical every time. The declared maths and the verifier that proves it live in the repo.
             </div>
+
+            <p className="howto-tabs">
+              The tabs switch screens: <b>PLAY</b> is the table, <b>COLLECT</b> is your
+              album of prizes, <b>DAILY</b> is today's objectives. Progress is saved in
+              this browser.
+            </p>
 
             <button className="howto-ok" type="button" onClick={dismissHow}>GOT IT</button>
           </div>

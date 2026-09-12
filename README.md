@@ -33,6 +33,12 @@ Real money mode runs inside chain.wtf through the official casino SDK bridge: th
 | Cosmetics cannot touch payouts | Prize drops derive from leftover VRF bytes and are proven payout-invariant by test. |
 | Verified | 300 of 300 legal composition classes price to exactly 96 percent, Monte Carlo over ~2M spins lands at 95.85 percent, and 3 of 3 end-to-end rounds settle on a live VRF node with payouts exact to the wei. Full detail in [docs/MATH.md](docs/MATH.md). |
 
+## How the booth is laid out
+
+The game is three screens, the way a game app is built rather than one long page. **PLAY** holds the wheel, the bet and the spin, with the last few results beside the LCD and a preview of your shelf that opens the album. **COLLECT** is the whole album: every prize in its set, each set naming the livery it pays out, with the season progress bar. **DAILY** is today's three objectives and the seven rung ladder.
+
+On a wide screen the switcher is a segmented control under the header. On a phone it is a fixed bottom bar with thumb sized targets, the SPIN bar sits directly above it, and only the active screen is in the document, so nothing important is ever below the fold and no screen starts half scrolled. The tab badges carry live counts (prizes collected, objectives done), which is what gives a player a reason to leave the table.
+
 ## Retention: the album and the daily booth
 
 The spin is the core loop, not the whole game. Two systems sit on top of it, and both are strictly cosmetic.
@@ -114,7 +120,7 @@ Report anything suspicious by opening a GitHub issue or reaching out on the Chai
 
 ## Performance
 
-65 KB gzipped total, zero runtime image assets (the game is drawn entirely in SVG and CSS, audio is synthesized in the browser), self-hosted font subsets and no third-party requests of any kind. The game paints its first frame before most sites finish their font fetch. The only PNGs in the repo are the favicon, the social card and the catalog icon and cover declared in `game.manifest.json`, none of which block the first frame. Designed to load near-instantly on mobile data, which the jam checks.
+66 KB gzipped total, zero runtime image assets (the game is drawn entirely in SVG and CSS, audio is synthesized in the browser), self-hosted font subsets and no third-party requests of any kind. The game paints its first frame before most sites finish their font fetch. The only PNGs in the repo are the favicon, the social card and the catalog icon and cover declared in `game.manifest.json`, none of which block the first frame. Designed to load near-instantly on mobile data, which the jam checks.
 
 ## Development
 
