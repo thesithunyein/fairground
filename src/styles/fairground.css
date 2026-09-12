@@ -100,6 +100,11 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  /* The brand, the bank chip, the LCD and the two icon buttons together need
+     about 750px. Wrapping lets the chips move to a second line in the 660 to
+     750 band (a small window, a foldable) instead of pushing past the right
+     edge of the screen. */
+  flex-wrap: wrap;
 }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand-mark {
@@ -124,7 +129,7 @@ body {
   color: var(--ink-soft);
 }
 
-.chips { display: flex; align-items: center; gap: 8px; }
+.chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .chip {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 7px 12px;
@@ -171,7 +176,13 @@ body {
    its content's min-content width and the whole page scrolls sideways on a
    phone. The zero minimum lets the single-column layout actually fit. */
 .stage > * { min-width: 0; }
-@media (max-width: 860px) {
+/* One breakpoint decides the shape of the whole app: below it the booth is a
+   stacked app with pinned bars, above it the table is side by side. It used to
+   flip at 860px, which left 660 to 860 (a tablet, a landscape phone, the
+   800x600 jam iframe) single column with a SPIN button that scrolled off the
+   bottom of the screen. Two columns from 660px up keeps the wheel and the
+   SPIN button on the same screen, which is the whole point of a table. */
+@media (max-width: 660px) {
   .stage { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -244,7 +255,9 @@ body {
 }
 .tab .t-icon { font-size: 14px; line-height: 1; }
 .tab .t-badge {
-  font-size: 8px;
+  /* 8px pixel type was the smallest text in the app and it carries a status
+     word, so it reads at 9px without leaving the pixel flavour */
+  font-size: 9px;
   letter-spacing: 0.04em;
   padding: 2px 5px;
   border-radius: 999px;
@@ -263,7 +276,7 @@ body {
 /* the recent-spins readout beside the LCD */
 .recent { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; padding: 0 2px; }
 .recent .r-lbl {
-  font-family: var(--font-pixel); font-size: 8px; letter-spacing: 0.1em;
+  font-family: var(--font-pixel); font-size: 9px; letter-spacing: 0.1em;
   color: var(--ink-soft);
 }
 .recent .r-empty { font-size: 10.5px; color: var(--ink-faint); }
@@ -289,7 +302,7 @@ body {
 }
 .pp-label {
   font-family: var(--font-pixel);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-soft);
@@ -650,7 +663,7 @@ body {
 .prize-cell.legendary.owned { background: var(--paper-gold); }
 .prize-cell .rarity-tag {
   position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%);
-  font-size: 8px; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase;
+  font-size: 9px; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase;
   background: var(--ink); color: var(--paper);
   border-radius: 4px; padding: 1px 5px;
   white-space: nowrap;
@@ -958,6 +971,13 @@ body {
   box-shadow: 2px 2px 0 var(--ink);
   color: var(--ink); cursor: pointer;
 }
+/* the two controls in the first-run card are the smallest buttons in the app
+   and they are the ones a brand new player has to hit, so they get the touch
+   floor on any finger device */
+@media (pointer: coarse), (any-pointer: coarse), (max-width: 1024px) {
+  .howto-x { width: 44px; height: 44px; font-size: 13px; }
+  .howto-ok { min-height: 44px; padding: 12px 18px; }
+}
 .howto-ok:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
 @media (max-width: 480px) {
   .howto-backdrop { padding: 10px; }
@@ -992,7 +1012,7 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   MOBILE — phones first for chain.wtf players (≤ 640px).
+   MOBILE — phones first for chain.wtf players (≤ 660px).
    Same design language; wheel up top, thumb-zone bet bar, ≥44px touch.
    ═══════════════════════════════════════════════════════════════════ */
 html, body { overflow-x: clip; } /* phones: never scroll sideways */
@@ -1019,7 +1039,7 @@ html, body { overflow-x: clip; } /* phones: never scroll sideways */
   .howto-backdrop, .howto { animation: none; }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 660px) {
   /* bottom padding clears the fixed SPIN bar and the tab bar under it */
   .app { padding: 10px 10px calc(154px + env(safe-area-inset-bottom, 0px)); }
 
@@ -1060,7 +1080,7 @@ html, body { overflow-x: clip; } /* phones: never scroll sideways */
   .brand-sub { font-size: 9px; }
   .chips { gap: 6px; margin-left: auto; }
   .chip { min-height: 44px; padding: 5px 9px; font-size: 13px; }
-  .chip .lbl { font-size: 8px; }
+  .chip .lbl { font-size: 9px; }
   .chip.lcd { display: none; } /* redundant on phones — the LCD panel below shows status */
   .icon-btn { width: 44px; height: 44px; }
   .overlay-badge { align-self: center; }
@@ -1114,7 +1134,65 @@ html, body { overflow-x: clip; } /* phones: never scroll sideways */
 }
 
 /* short landscape phones (e.g. 844×390): keep SPIN reachable, shrink wheel */
-@media (max-width: 640px) and (orientation: landscape) {
+@media (max-width: 660px) and (orientation: landscape) {
   .app { padding-bottom: 84px; }
   .wheel-svg { width: min(46vh, 300px); }
+}
+
+/* ── fitting the table to the screen, not just to the width ─────────────
+   A wide but short viewport is the norm on the web and the exact shape of
+   the jam iframe (800x600). A wheel sized by width alone pushes the controls
+   off the bottom of those screens, so above the phone breakpoint the wheel is
+   capped by height as well and the whole table, controls included, lands on
+   one screen. On a phone the pinned bars already cover reachability. */
+@media (min-width: 661px) and (max-height: 760px) {
+  .wheel-svg { width: min(52vh, 430px); }
+}
+
+/* Very short viewports (a landscape phone, a short browser window) put the SPIN
+   button under the fold whatever the column count, so pin it and clear the
+   space it occupies. Above the phone breakpoint the nav is in the flow, so
+   only the button needs clearing. */
+@media (max-height: 560px) {
+  .app { padding-bottom: 96px; }
+  .spin-btn {
+    position: fixed;
+    left: 12px; right: 12px;
+    width: auto;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    z-index: 40;
+  }
+}
+
+/* the small text actions under the bet (copy link, slice count) pass through
+   inline styling for color and weight, but they still need a real hit box */
+.mini-link { padding: 6px 2px; }
+
+/* the fairness toggle is the one target that is too small on every device,
+   touch or not: an 11px tall summary is hard to hit with a cursor too. This
+   has to land BEFORE the touch block below, or it wins the cascade there at
+   equal specificity and the 44px floor never applies. */
+.fair-deets summary {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+}
+
+/* ── touch targets ─────────────────────────────────────────────────────
+   On a touch device every control is a finger, not a cursor. The desktop
+   sizes (32px presets, 34px tier pills, 38px icon buttons) are comfortable to
+   click and missable to tap, so raise them to the 44px floor on any coarse
+   pointer, at any width. `any-pointer` catches the touchscreen laptops that
+   report a fine primary pointer, and the width test is the fallback for the
+   touch devices whose pointer media query lies or is missing: if a device is
+   narrower than a laptop it is a finger device until proven otherwise. */
+@media (pointer: coarse), (any-pointer: coarse), (max-width: 1024px) {
+  .preset { min-height: 44px; padding: 10px 13px; }
+  .tier-pill { min-height: 44px; }
+  .icon-btn { width: 44px; height: 44px; }
+  .half-double { width: 48px; height: 48px; }
+  .fair-deets summary { min-height: 44px; padding: 12px 0; }
+  .tab { min-height: 50px; }
+  .livery-dot { width: 40px; height: 40px; }
+  .mini-link { min-height: 44px; padding: 0 4px; }
 }

@@ -38,6 +38,17 @@ export function useCasinoHost(): HostConnection {
     let mounted = true;
     let gotState = false;
 
+    /* Opened directly, there is no host to wait for, so play at once instead of
+       showing the connecting splash for the length of the handshake timeout.
+       A pipe is only ever delivered through a parent frame, so a page that is
+       its own top window can skip the wait. The connection still runs, so an
+       embed that reaches us late (a gallery iframe, a host that boots slowly)
+       upgrades from demo to host exactly as before. */
+    const embedded = (() => {
+      try { return window.parent !== window; } catch { return true; }
+    })();
+    if (!embedded) setMode('demo');
+
     const guestMethods: GuestApiV1 = {
       async setState(nextSnapshot) {
         if (!mounted) return;

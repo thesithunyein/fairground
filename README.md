@@ -39,6 +39,20 @@ The game is three screens, the way a game app is built rather than one long page
 
 On a wide screen the switcher is a segmented control under the header. On a phone it is a fixed bottom bar with thumb sized targets, the SPIN bar sits directly above it, and only the active screen is in the document, so nothing important is ever below the fold and no screen starts half scrolled. The tab badges carry live counts (prizes collected, objectives done), which is what gives a player a reason to leave the table.
 
+## Devices
+
+The layout is decided by two things: how wide the screen is, and how tall it is.
+
+**One width breakpoint, at 660px.** Above it the table is side by side, wheel and controls together, the way a table should be. Below it the booth becomes a stacked app: wheel up top, the SPIN bar and the three screens pinned in the thumb zone, and only the active screen in the document. Between 660 and 860 the old layout used to stay stacked, which meant a tablet, a landscape phone and the 800x600 jam iframe all had a SPIN button below the bottom of the screen. Two columns from 660 up puts the wheel and the SPIN button on the same screen at every size that can fit both.
+
+**Height matters too.** A wheel sized by width alone pushes the controls off a wide but short screen, which is the exact shape of the jam iframe. Above the phone breakpoint the wheel is therefore capped by height as well (`min(52vh, 430px)`), and on a viewport shorter than 560px the SPIN bar is pinned to the bottom of the window whatever the column count, so the button a player needs is never below the fold.
+
+**Touch targets.** Desktop sizes are tuned for a cursor, so on any coarse pointer (including the touchscreen laptops that report a fine primary pointer) every control is raised to the 44px floor: presets, tier pills, icon buttons, the bet steppers, the first-run card's own controls, and the text actions under the bet. A viewport narrower than a laptop gets the same treatment, as a fallback for the touch devices whose pointer media query is missing or wrong.
+
+**Instant standalone.** Opened directly, there is no host to wait for, so the game plays immediately instead of showing the connecting splash for the length of the handshake timeout. The handshake still runs, so an embed that arrives late still upgrades from demo to host with no reload.
+
+Every one of those claims is measured, not assumed. `public/qa-viewports.html` loads the game in a same-origin iframe at ten viewports, from a 320px phone to a 1600px desktop, so the media queries genuinely re-evaluate, and reports per viewport: horizontal overflow, tap targets under 44px, the smallest rendered font, where SPIN and the nav land, how much scrolling the PLAY screen needs, and whether the first-run card fits. Open it on any running copy of the site (it is served at `/qa-viewports.html`) and read `window.__QA__`.
+
 PLAY teaches the whole mechanic without a manual. Three **stake shapes** (Gentle, Standard, Wild) are legal by construction, so one tap gives a newcomer a sensible paint and shows the full risk range. A **price line** under the slices reads back the trade as you paint (`6 of 12 risky - risky pays 1.56x - RTP 96.00%`), which is the part of the design that is otherwise invisible: the more of the wheel you take risky, the less each risky slice pays, and the return never moves. A refused tap is never swallowed, it shakes the panel and says why. A three step **first loop** checklist (paint, spin, collect) retires itself once the loop has been played, and a collapsed **Why this stays fair** panel shows the current paint's counts, its multipliers and the command that proves the maths.
 
 ## Retention: the album and the daily booth

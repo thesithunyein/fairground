@@ -2,22 +2,190 @@
 <html>
 <head>
 <meta charset="utf-8" />
-<title>FAIRGROUND · viewport QA</title>
+<title>FAIRGROUND device QA</title>
 <style>
-  body { margin: 0; background: #e8e4d8; font: 12px/1.4 monospace; padding: 12px; }
-  h3 { margin: 14px 0 4px; }
-  .frame { border: 3px solid #141414; border-radius: 10px; overflow: hidden; background: #fff; box-shadow: 4px 4px 0 rgba(20,20,20,.3); }
-  iframe { border: 0; display: block; }
-  .phone { width: 390px; height: 700px; }
-  .phone iframe { width: 390px; height: 700px; }
-  .gallery { width: 800px; height: 600px; }
-  .gallery iframe { width: 800px; height: 600px; }
+  body { margin: 0; background: #0d0f12; color: #e8e8e8; font: 12px/1.4 ui-monospace, monospace; }
+  .wrap { padding: 12px; }
+  iframe#stage { border: 1px solid #3a4048; display: block; background: #fff; }
+  pre { font-size: 11px; white-space: pre-wrap; }
+  .bad { color: #ff8a80; } .ok { color: #9ce39c; } .warn { color: #ffd479; }
 </style>
 </head>
 <body>
-  <h3>PHONE · 390 × 700 (sticky SPIN bar should be visible in thumb zone)</h3>
-  <div class="frame phone"><iframe src="/" title="phone"></iframe></div>
-  <h3>GALLERY CARD · 800 × 600 (jam embed size)</h3>
-  <div class="frame gallery"><iframe src="/" title="gallery"></iframe></div>
+<!--
+  FAIRGROUND viewport QA.
+
+  Loads the game in a same-origin iframe at every target viewport so the media
+  queries genuinely re-evaluate, then reports, per viewport: horizontal
+  overflow, tap targets under 44px, the smallest rendered font, where SPIN and
+  the nav land, how much scrolling the PLAY screen needs, and whether the
+  first-run card fits. The full result set is left on `window.__QA__`.
+
+  Open /qa-viewports.html on whatever is running (dev server, preview, or the
+  deployed site) and watch the page fill in.
+
+  The iframes are measured one at a time on purpose: ten concurrent copies of
+  the app starve each other of CPU, and half of them are still on the
+  connecting splash when they get measured.
+-->
+<div class="wrap">
+  <div id="head" style="margin-bottom:8px"></div>
+  <iframe id="stage" width="390" height="844"></iframe>
+  <pre id="out"></pre>
+</div>
+<script>
+const SIZES = [
+  { n: 'iPhone SE (320x568)', w: 320, h: 568 },
+  { n: 'Android small (360x640)', w: 360, h: 640 },
+  { n: 'iPhone 14 (390x844)', w: 390, h: 844 },
+  { n: 'iPhone Pro Max (430x932)', w: 430, h: 932 },
+  { n: 'Fold closed (600x800)', w: 600, h: 800 },
+  // the band just above the phone breakpoint is the riskiest one: two columns
+  // have to fit in less width than any tablet
+  { n: 'Just two columns (700x900)', w: 700, h: 900 },
+  { n: 'iPad mini (768x1024)', w: 768, h: 1024 },
+  { n: 'Jam iframe (800x600)', w: 800, h: 600 },
+  { n: 'Laptop (1280x720)', w: 1280, h: 720 },
+  { n: 'Desktop (1600x900)', w: 1600, h: 900 },
+  { n: 'Landscape phone (844x390)', w: 844, h: 390 },
+];
+const APP = '/?theme=light';
+// The first-run card is a fixed overlay and it is shown on a fresh origin, which
+// would hide the layout we are actually measuring. Dismiss it up front; it gets
+// measured on its own at the end.
+try { localStorage.setItem('fg_hint_done', '1'); } catch (e) { /* private mode */ }
+
+function collect(doc, win) {
+  const de = doc.documentElement;
+  const vw = win.innerWidth, vh = win.innerHeight;
+  const out = { vw, vh, scrollH: de.scrollHeight, scrollW: de.scrollWidth };
+
+  // elements crossing the viewport edge. `overflow-x: clip` hides the sideways
+  // scrollbar, so scrollWidth cannot be trusted as the overflow signal.
+  const over = [];
+  for (const el of doc.querySelectorAll('body *')) {
+    const cs = win.getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden' || cs.position === 'fixed') continue;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) continue;
+    if (r.right > vw + 1 || r.left < -1) {
+      const cls = (typeof el.className === 'string' && el.className) ? '.' + el.className.trim().split(/\s+/).slice(0, 2).join('.') : '';
+      over.push({ sel: el.tagName.toLowerCase() + cls, right: Math.round(r.right), left: Math.round(r.left), w: Math.round(r.width) });
+    }
+  }
+  out.overflow = over;
+
+  const small = [];
+  for (const el of doc.querySelectorAll('button, a, input, [role="tab"], summary')) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) continue;
+    if (r.height < 44 || r.width < 44) {
+      const cls = (typeof el.className === 'string' && el.className) ? '.' + el.className.trim().split(/\s+/)[0] : '';
+      small.push({ sel: el.tagName.toLowerCase() + cls, label: (el.textContent || '').trim().slice(0, 16), w: Math.round(r.width), h: Math.round(r.height) });
+    }
+  }
+  out.smallTargets = small;
+
+  let minFont = 99, minWhere = '';
+  for (const el of doc.querySelectorAll('body *')) {
+    if (!el.textContent || !el.textContent.trim() || el.children.length > 0) continue;
+    const cs = win.getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) continue;
+    const fs = parseFloat(cs.fontSize);
+    if (fs < minFont) { minFont = fs; minWhere = (el.textContent || '').trim().slice(0, 20); }
+  }
+  out.minFont = { size: Math.round(minFont * 10) / 10, where: minWhere };
+
+  const box = (sel) => {
+    const el = doc.querySelector(sel);
+    if (!el) return null;
+    const r = el.getBoundingClientRect(), cs = win.getComputedStyle(el);
+    return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height), bottom: Math.round(r.bottom), pos: cs.position };
+  };
+  out.key = { spin: box('.spin-btn'), nav: box('.tabnav'), wheel: box('.wheel-svg'), presets: box('.paint-presets'), readout: box('.paint-readout'), tierRow: box('.tier-row'), shelf: box('.shelf-jump'), panel: box('.panel') };
+  out.spinAboveFold = out.key.spin ? out.key.spin.bottom <= vh : null;
+  const bi = doc.querySelector('.bet-input-wrap input');
+  out.betFont = bi ? Math.round(parseFloat(win.getComputedStyle(bi).fontSize) * 10) / 10 : null;
+  out.pageNeedsScroll = out.key.panel ? Math.max(0, Math.round(out.key.panel.bottom + 30 - vh)) : null;
+  out.demoBadge = !!doc.querySelector('.overlay-badge');
+  out.fairSummaryH = (() => { const s = doc.querySelector('.fair-deets summary'); return s ? Math.round(s.getBoundingClientRect().height) : null; })();
+  return out;
+}
+
+const results = [];
+async function measureOne(s) {
+  const stage = document.getElementById('stage');
+  stage.width = s.w; stage.height = s.h;
+  const wait = new Promise((res) => stage.addEventListener('load', res, { once: true }));
+  stage.src = APP + '&qa=' + Date.now();
+  await wait;
+  const t0 = Date.now();
+  let ready = false;
+  while (Date.now() - t0 < 25000) {
+    const d = stage.contentDocument;
+    if (d && d.querySelector('.spin-btn') && d.querySelector('.wheel-svg')) { ready = true; break; }
+    await new Promise(r => setTimeout(r, 200));
+  }
+  const shellMs = ready ? Date.now() - t0 : -1;
+  await new Promise(r => setTimeout(r, 250));
+  const r = collect(stage.contentDocument, stage.contentWindow);
+  r.ready = ready; r.shellMs = shellMs;
+  results.push({ size: s.n, ...r });
+  return { s, r };
+}
+
+function render(s, r) {
+  const L = [];
+  L.push(s.n + '  viewport ' + r.vw + 'x' + r.vh + '  shell in ' + r.shellMs + 'ms');
+  L.push('overflow: ' + (r.overflow.length ? r.overflow.length + ' ' + r.overflow.slice(0, 4).map(o => o.sel + '@' + o.right).join(' ') : '0'));
+  L.push('targets<44: ' + (r.smallTargets.length ? r.smallTargets.length + ' ' + r.smallTargets.slice(0, 6).map(t => t.sel + ' ' + t.w + 'x' + t.h).join(' ') : '0'));
+  L.push('min font ' + r.minFont.size + 'px "' + r.minFont.where + '"  bet font ' + r.betFont + 'px');
+  const k = r.key;
+  L.push('SPIN ' + (k.spin ? k.spin.w + 'x' + k.spin.h + ' y' + k.spin.y + ' ' + k.spin.pos : 'n/a') + ' | above fold ' + r.spinAboveFold);
+  L.push('nav ' + (k.nav ? k.nav.w + 'x' + k.nav.h + ' ' + k.nav.pos : 'n/a') + ' | wheel ' + (k.wheel ? k.wheel.w + 'x' + k.wheel.h : 'n/a') + ' | fair summary h ' + r.fairSummaryH);
+  L.push('scroll needed ' + r.pageNeedsScroll + 'px | doc ' + r.scrollH + 'px = ' + Math.round(r.scrollH / r.vh * 10) / 10 + ' screens');
+  return L.join('\n');
+}
+
+/* the first-run card, measured on its own: it only appears when the hint flag
+   is unset, so it needs a fresh pass with the flag cleared */
+async function measureFirstRun(w, h) {
+  const stage = document.getElementById('stage');
+  stage.width = w; stage.height = h;
+  try { localStorage.removeItem('fg_hint_done'); } catch (e) { /* ignore */ }
+  const wait = new Promise((res) => stage.addEventListener('load', res, { once: true }));
+  stage.src = APP + '&first=' + Date.now();
+  await wait;
+  const t0 = Date.now();
+  while (Date.now() - t0 < 25000) {
+    const d = stage.contentDocument;
+    if (d && d.querySelector('.howto')) break;
+    await new Promise(r => setTimeout(r, 200));
+  }
+  await new Promise(r => setTimeout(r, 250));
+  const d = stage.contentDocument, win = stage.contentWindow;
+  const rect = (sel) => { const el = d.querySelector(sel); if (!el) return null; const r = el.getBoundingClientRect(); return Math.round(r.width) + 'x' + Math.round(r.height); };
+  const card = d.querySelector('.howto');
+  const fits = card ? (card.getBoundingClientRect().height <= win.innerHeight && card.getBoundingClientRect().width <= win.innerWidth) : false;
+  return w + 'x' + h + ': card ' + rect('.howto') + ' fits ' + fits + ' | close ' + rect('.howto-x') + ' | got-it ' + rect('.howto-ok');
+}
+
+async function run() {
+  const out = document.getElementById('out');
+  for (const s of SIZES) {
+    const { r } = await measureOne(s);
+    out.innerHTML += render(s, r) + '\n\n';
+    document.getElementById('head').textContent = s.n + ' done';
+  }
+  const firstRun = [await measureFirstRun(320, 568), await measureFirstRun(390, 844)];
+  out.innerHTML += 'FIRST-RUN CARD\n' + firstRun.join('\n') + '\n';
+  window.__QA__ = results;
+  window.__FIRST_RUN__ = firstRun;
+  document.getElementById('head').textContent = 'ALL DONE';
+}
+run();
+</script>
 </body>
 </html>

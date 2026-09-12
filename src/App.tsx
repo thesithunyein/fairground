@@ -878,12 +878,14 @@ export default function App() {
             <div className="bet-meta">
               <span>{wagerPreview ?? `max ${formatUnits(maxWager, decimals)}`}</span>
               <button
+                className="mini-link"
                 style={{ border: 'none', background: 'none', color: 'var(--blue-deep)', fontWeight: 900, cursor: 'pointer', fontSize: 11 }}
                 onClick={shareWheel}
               >
                 {copied ? 'LINK COPIED ✓' : 'COPY WHEEL LINK'}
               </button>
               <button
+                className="mini-link"
                 style={{ border: 'none', background: 'none', color: 'var(--blue-deep)', fontWeight: 900, cursor: 'pointer', fontSize: 11 }}
                 onClick={cycleSegmentCount}
               >
