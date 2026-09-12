@@ -475,6 +475,60 @@ body {
   font-size: 15px; color: var(--green);
 }
 
+/* ── stats strip ─────────────────────────────────────────────────── */
+.stats-strip {
+  display: flex; flex-wrap: wrap; gap: 6px 14px;
+  justify-content: center;
+  margin-top: 9px;
+  padding: 7px 10px;
+  border: 2px dashed var(--line);
+  border-radius: 10px;
+  font-size: 11px; font-weight: 700; color: var(--ink-soft);
+}
+.stats-strip b { color: var(--ink); font-weight: 900; }
+.stats-strip .hot b { color: var(--red-deep); }
+
+/* ── first-visit paint hint ──────────────────────────────────────── */
+.paint-hint {
+  position: relative;
+  margin-top: 10px;
+  display: flex; align-items: center; gap: 8px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--paper-blue);
+  box-shadow: 3px 3px 0 var(--ink);
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.paint-hint .hint-hand { font-size: 22px; animation: hintBob 1.2s ease-in-out infinite; }
+@keyframes hintBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px) rotate(-12deg); } }
+.paint-hint .hint-card { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--ink); }
+.paint-hint .hint-card b { letter-spacing: 0.04em; }
+.paint-hint .hint-ok {
+  align-self: flex-start; margin-top: 4px;
+  font-family: var(--font-pixel); font-size: 9px;
+  border: 2px solid var(--ink); border-radius: 6px;
+  background: var(--gold); padding: 2px 8px;
+  box-shadow: 2px 2px 0 var(--ink);
+  cursor: pointer;
+}
+
+/* ── legendary/big-win confetti ──────────────────────────────────── */
+.confetti {
+  position: fixed; inset: 0; z-index: 90;
+  pointer-events: none; overflow: hidden;
+}
+.confetti i {
+  position: absolute; top: -12px;
+  border: 1px solid rgba(20, 20, 20, 0.35);
+  animation: confettiFall linear forwards;
+}
+@keyframes confettiFall {
+  0% { transform: translateY(-4vh) rotate(0deg); opacity: 1; }
+  85% { opacity: 1; }
+  100% { transform: translateY(105vh) rotate(720deg); opacity: 0; }
+}
+
 /* ── wallet state note (host mode) ───────────────────────────────── */
 .wallet-note {
   border: 2px solid var(--ink);
@@ -546,6 +600,8 @@ html, body { overflow-x: clip; } /* phones: never scroll sideways */
     50% { box-shadow: 0 4px 0 var(--ink), 0 10px 24px rgba(20, 20, 20, 0.28), 0 0 0 7px rgba(47, 107, 255, 0.2); }
   }
 
+  .stats-strip { font-size: 10px; gap: 4px 10px; padding: 6px 8px; }
+  .paint-hint .hint-card { font-size: 10px; }
   .shelf-row { gap: 6px; }
   .livery-dot { width: 34px; height: 34px; }
   .fair-note { flex-direction: column; gap: 4px; font-size: 10px; text-align: center; }

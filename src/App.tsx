@@ -34,6 +34,48 @@ const PHASE_FORFEITED = 4;
 const PHASE_CANCELLED = 5;
 const isTerminal = (p: number | undefined) => p === PHASE_SETTLED || p === PHASE_FORFEITED || p === PHASE_CANCELLED;
 
+// ── session stats & milestones (client-only cosmetics) ─────────────────
+type Stats = {
+  spins: number;
+  streak: number; // consecutive winning spins
+  bestWin: string; // formatted, e.g. "2.58"
+  milestones: string[]; // ids already celebrated
+  lastPlayDay: string; // YYYY-MM-DD
+  dailyStreak: number;
+};
+
+const STATS_KEY = 'fg_stats_v1';
+const dayKey = (d = new Date()) => d.toISOString().slice(0, 10);
+
+function loadStats(): Stats {
+  const base: Stats = { spins: 0, streak: 0, bestWin: '0', milestones: [], lastPlayDay: '', dailyStreak: 0 };
+  try {
+    const raw = localStorage.getItem(STATS_KEY);
+    if (!raw) return base;
+    const s = { ...base, ...JSON.parse(raw) } as Stats;
+    const today = dayKey();
+    if (s.lastPlayDay && s.lastPlayDay !== today) {
+      const yest = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
+      s.dailyStreak = s.lastPlayDay === yest ? s.dailyStreak : 0;
+    }
+    return s;
+  } catch { return base; }
+}
+
+function saveStats(s: Stats) {
+  try { localStorage.setItem(STATS_KEY, JSON.stringify(s)); } catch { /* ignore */ }
+}
+
+// shareable wheels: pack the paint into the ?wheel= URL param
+function paintToUrlParam(p: Paint): string {
+  return encodeGameData(p).slice(2); // strip 0x
+}
+
+function paintFromUrlParam(param: string | null): Paint | null {
+  if (!param || !/^[0-9a-fA-F]{18}$/.test(param)) return null;
+  try { return decodeGameData((`0x${param}`) as never); } catch { return null; }
+}
+
 type Round = {
   sessionKey?: string;
   sessionId?: string;
@@ -80,7 +122,19 @@ export default function App() {
   const { hostApi, snapshot, mode } = useCasinoHost();
   const demo = mode === 'demo';
 
-  const [paint, setPaint] = useState<Paint>(defaultPaint);
+  const [paint, setPaint] = useState<Paint>(() => {
+    // restore a shared/last-used wheel from the URL (?wheel=…), else last local paint
+    try {
+      const fromUrl = paintFromUrlParam(new URLSearchParams(window.location.search).get('wheel'));
+      if (fromUrl) return fromUrl;
+      const saved = localStorage.getItem('fg_paint_v1');
+      if (saved) {
+        const p = decodeGameData(saved as never);
+        if (p) return p;
+      }
+    } catch { /* ignore */ }
+    return defaultPaint();
+  });
   const [paintTier, setPaintTier] = useState<Tier>(2);
   const [betInput, setBetInput] = useState('1');
   const [round, setRound] = useState<Round | null>(null);
@@ -92,6 +146,12 @@ export default function App() {
   const [muted, setMuted] = useState(() => { sfx.initSound(); return sfx.isMuted(); });
   const [balance, setBalance] = useState(DEMO_BALANCE_START);
   const [lcd, setLcd] = useState('FAIRGROUND v1.0');
+  const [stats, setStats] = useState<Stats>(() => loadStats());
+  const [hintDone, setHintDone] = useState(() => {
+    try { return localStorage.getItem('fg_hint_done') === '1'; } catch { return true; }
+  });
+  const [confetti, setConfetti] = useState(0); // increments to fire the legendary burst
+  const [copied, setCopied] = useState(false);
   const [err, setErr] = useState('');
   const roundRef = useRef<Round | null>(null);
   roundRef.current = round;
@@ -185,6 +245,34 @@ export default function App() {
       setBalance(b => (b - r.wager + outcome.payout));
     }
 
+    // session stats, streaks, milestones (cosmetic, client-only)
+    const winAmount = formatUnits(outcome.payout, decimals);
+    const bigWin = outcome.tier === 2 || outcome.prize.rarity === 'legendary';
+    if (bigWin) setConfetti(c => c + 1);
+    setStats(prev => {
+      const today = dayKey();
+      const next: Stats = {
+        spins: prev.spins + 1,
+        streak: won ? prev.streak + 1 : 0,
+        bestWin: won && parseFloat(winAmount) > parseFloat(prev.bestWin) ? winAmount : prev.bestWin,
+        milestones: prev.milestones,
+        lastPlayDay: today,
+        dailyStreak: prev.lastPlayDay === today ? prev.dailyStreak : prev.dailyStreak + 1,
+      };
+      const celebrate = (id: string, label: string) => {
+        if (next.milestones.includes(id)) return;
+        next.milestones = [...next.milestones, id];
+        window.setTimeout(() => { setLcd(`★ ${label} ★`); sfx.fanfare(); }, 1900);
+      };
+      if (next.spins === 10) celebrate('spins10', '10 SPINS');
+      if (next.spins === 50) celebrate('spins50', '50 SPINS');
+      if (outcome.prize.rarity === 'rare') celebrate('firstRare', 'FIRST RARE PRIZE');
+      if (outcome.prize.rarity === 'legendary') celebrate('firstLegendary', 'FIRST LEGENDARY!');
+      if (next.streak >= 5) celebrate(`streak${next.streak}`, `${next.streak} WIN STREAK`);
+      saveStats(next);
+      return next;
+    });
+
     // prize collection
     const { next, isNew } = addToCollection(collection, outcome.prize.id, outcome.prize.rarity);
     setCollection(next);
@@ -230,6 +318,11 @@ export default function App() {
     if (wager <= 0n) { setErr('Enter a bet amount.'); return; }
     if (wager > maxWager) { setErr(`Max bet right now: ${formatUnits(maxWager, decimals)} ${symbol}`); return; }
     if (demo && wager > balance) { setErr('Not enough demo balance.'); return; }
+
+    if (!hintDone) {
+      setHintDone(true);
+      try { localStorage.setItem('fg_hint_done', '1'); } catch { /* ignore */ }
+    }
 
     const gameData = encodeGameData(paint);
 
@@ -287,6 +380,32 @@ export default function App() {
       const np = { ...paint, tiers };
       if (isLegalPaint(np)) { setPaint(np); return; }
     }
+  }
+
+  // persist the paint locally + mirror it into the URL as a shareable wheel
+  useEffect(() => {
+    try {
+      localStorage.setItem('fg_paint_v1', encodeGameData(paint));
+      const u = new URL(window.location.href);
+      u.searchParams.set('wheel', paintToUrlParam(paint));
+      window.history.replaceState(null, '', u);
+    } catch { /* ignore */ }
+  }, [paint]);
+
+  // first-visit hint auto-dismiss
+  useEffect(() => {
+    if (hintDone) return;
+    const t = window.setTimeout(() => {
+      setHintDone(true);
+      try { localStorage.setItem('fg_hint_done', '1'); } catch { /* ignore */ }
+    }, 10000);
+    return () => window.clearTimeout(t);
+  }, [hintDone]);
+
+  function shareWheel() {
+    try { void navigator.clipboard.writeText(window.location.href); } catch { /* ignore */ }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
   }
 
   const wagerPreview = (() => {
@@ -367,6 +486,26 @@ export default function App() {
               </button>
             ))}
           </div>
+
+          {stats.spins > 0 && (
+            <div className="stats-strip">
+              <span><b>{stats.spins}</b> spins</span>
+              <span className={stats.streak >= 3 ? 'hot' : ''}><b>{stats.streak}</b> streak</span>
+              <span>best <b>{stats.bestWin}</b></span>
+              <span>day <b>{stats.dailyStreak}</b> 🔥</span>
+            </div>
+          )}
+
+          {!hintDone && stats.spins === 0 && (
+            <div className="paint-hint" onClick={() => { setHintDone(true); try { localStorage.setItem('fg_hint_done', '1'); } catch { /* ignore */ } }}>
+              <div className="hint-hand">👆</div>
+              <div className="hint-card">
+                <span><b>1 · TAP A SLICE</b> — paint it safe, mid or risky. You choose the payouts.</span>
+                <span><b>2 · SPIN</b> — the wheel itself is always fair. RTP stays 96% however you paint.</span>
+                <button className="hint-ok" type="button">GOT IT</button>
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="controls">
@@ -394,6 +533,12 @@ export default function App() {
             </div>
             <div className="bet-meta">
               <span>{wagerPreview ?? `max ${formatUnits(maxWager, decimals)}`}</span>
+              <button
+                style={{ border: 'none', background: 'none', color: 'var(--blue-deep)', fontWeight: 900, cursor: 'pointer', fontSize: 11 }}
+                onClick={shareWheel}
+              >
+                {copied ? 'LINK COPIED ✓' : 'COPY WHEEL LINK'}
+              </button>
               <button
                 style={{ border: 'none', background: 'none', color: 'var(--blue-deep)', fontWeight: 900, cursor: 'pointer', fontSize: 11 }}
                 onClick={cycleSegmentCount}
@@ -466,6 +611,8 @@ export default function App() {
         <span className="stamp">DECLARED RTP 96% · HOUSE EDGE 4%</span>
       </footer>
 
+      {confetti > 0 && <ConfettiBurst key={confetti} />}
+
       {prizeToast && (
         <div className={`prize-toast ${prizeToast.rarity}`}>
           <PrizeSprite toy={prizeToast.id} rarity={prizeToast.rarity} size={30} />
@@ -475,6 +622,38 @@ export default function App() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ConfettiBurst() {
+  const pieces = useMemo(
+    () => Array.from({ length: 90 }, (_, i) => ({
+      left: Math.random() * 100,
+      delay: Math.random() * 0.35,
+      dur: 1.6 + Math.random() * 1.2,
+      size: 6 + Math.random() * 8,
+      color: ['#2f6bff', '#e8442e', '#f5b301', '#1d9e57', '#141414'][i % 5],
+      rot: Math.random() * 360,
+    })),
+    [],
+  );
+  return (
+    <div className="confetti" aria-hidden="true">
+      {pieces.map((p, i) => (
+        <i
+          key={i}
+          style={{
+            left: `${p.left}%`,
+            width: p.size,
+            height: p.size * 0.6,
+            background: p.color,
+            animationDelay: `${p.delay}s`,
+            animationDuration: `${p.dur}s`,
+            transform: `rotate(${p.rot}deg)`,
+          }}
+        />
+      ))}
     </div>
   );
 }
