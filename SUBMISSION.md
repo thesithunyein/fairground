@@ -2,6 +2,11 @@
 
 Deadline: **Sep 20, 2026, 23:59 UTC** · Target: **submit Sep 16–17**
 
+## Live URLs
+
+- **Primary (submit this):** https://thesithunyein.github.io/fairground/ — live, public, auto-deploys on every push to `main` (GitHub Actions)
+- **Mirror:** https://fairground.sithunyein.com — Vercel; NOTE: currently login-walled by Vercel's Deployment Protection until it is disabled in the dashboard (Settings → Deployment Protection → turn off Vercel Authentication)
+
 ## Eligibility gates (automated + human)
 
 - [x] Implements the Chain casino SDK exactly — `ICasinoGameV2`, SDK bridge only, validated manifest
