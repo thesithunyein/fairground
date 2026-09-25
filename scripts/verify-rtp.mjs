@@ -7,6 +7,8 @@
 // 2) Monte-Carlo over the legal space: empirical RTP from 250k simulated
 //    rejection-sampled spins.
 // 3) Prize-byte invariance and rejection-sampling uniformity checks.
+// 5) Body variance (4th quoteRiskParams parameter): the contract's closed form
+//    against an independent brute-force variance of the top-tier-removed payout.
 
 let fails = 0;
 const ok = (cond, label) => {
@@ -160,6 +162,76 @@ console.log('\n[4] Rejection-sampling uniformity (N=12, 120k draws)...');
   const dev = hist.map((h) => Math.abs(h - expected) / expected);
   console.log(`  buckets: ${hist.join(' ')}   max dev: ${(Math.max(...dev) * 100).toFixed(2)}%`);
   ok(Math.max(...dev) < 0.03, 'uniformity within 3%');
+}
+
+// ── 5) body variance (quoteRiskParams, 4th parameter) ────────────────────────
+// The SDK defines bodyVarianceScaled as the variance of this bet's payout with
+// the TOP tier removed, per bet, in wei²·1e18; a single-winning-tier game returns
+// 0. The contract quotes it as a closed form. Here we recompute it two ways:
+//   (a) the contract's closed form  p(1−p)·X²·1e18,  p = cMid/N,  X = mid payout
+//   (b) an independent brute-force variance over the segment distribution with
+//       every risky (top tier) outcome forced to pay 0, in exact rational floats
+// and assert the contract is zero *exactly* when no non-top winning tier exists.
+console.log('\n[5] Body variance: closed form vs brute force, every legal class...');
+{
+  const contractBody = (n, tiers, wager) => {
+    const [, cM] = counts(tiers);
+    if (cM === 0n) return 0n;
+    const { mid } = priceWheel(n, tiers);
+    if (mid <= WAD) return 0n;
+    const payout = (wager * mid) / WAD;
+    return (((cM * (BigInt(n) - cM)) * payout * payout) / (BigInt(n) * BigInt(n))) * WAD;
+  };
+
+  // Brute force: the "body" is the distribution of this bet's payout with the
+  // TOP tier removed, so (a) risky segments contribute nothing and (b) only
+  // payouts ABOVE the stake are wins — a partial return below the stake is a
+  // loss, which is why a single-winning-tier game comes out at exactly 0.
+  // Computed in floats from the exact integer price list; unit = wei²·1e18.
+  const bruteBody = (n, tiers, wager) => {
+    const { safe, mid } = priceWheel(n, tiers);
+    const payout = (mult) => (wager * mult) / WAD; // wei, exact
+    const vals = tiers.map((t) => {
+      if (t === 2) return 0; // top tier removed
+      const p = payout(t === 0 ? safe : mid);
+      return p > wager ? Number(p) : 0; // only above-stake payouts are wins
+    });
+    const N = vals.length;
+    const mean = vals.reduce((a, b) => a + b, 0) / N;
+    const v = vals.reduce((a, b) => a + (b - mean) * (b - mean), 0) / N;
+    return v * 1e18; // → wei²·1e18, the reserve's scaled units
+  };
+
+  const wager = 10n ** 18n; // 1 token, the canonical unit
+  let nonZero = 0, checked = 0, worstRel = 0, worstAt = null;
+  for (let n = 8; n <= 16; n += 2) {
+    for (let cR = 1; 2 * cR <= n; cR++) {
+      for (let cS = 0; cS + cR <= n; cS++) {
+        const cM = n - cS - cR;
+        const tiers = [...Array(cS).fill(0), ...Array(cM).fill(1), ...Array(cR).fill(2)];
+        if (!isLegal(n, tiers)) continue;
+        checked++;
+        const quoted = contractBody(n, tiers, wager);
+        const brute = bruteBody(n, tiers, wager);
+
+        // the SDK's rule: zero exactly when the risky tier is the sole winning tier
+        const { mid, risky } = priceWheel(n, tiers);
+        const secondWinningTier = cM > 0 && mid > WAD;
+        ok(
+          (quoted > 0n) === secondWinningTier,
+          `body var sign N=${n} (${cS},${cM},${cR}) mid=${mid} risky=${risky}`,
+        );
+        if (quoted > 0n) nonZero++;
+
+        const rel = Math.abs(Number(quoted) - brute) / Math.max(brute, 1);
+        if (rel > worstRel) { worstRel = rel; worstAt = `N=${n} cS=${cS} cM=${cM} cR=${cR}`; }
+        ok(rel < 1e-9, `body var closed form N=${n} (${cS},${cM},${cR}) rel=${rel}`);
+      }
+    }
+  }
+  console.log(`  legal classes checked: ${checked}`);
+  console.log(`  classes with non-zero body variance (mid is a second winning tier): ${nonZero}`);
+  console.log(`  worst relative deviation from brute force: ${(worstRel * 100).toExponential(2)}% at ${worstAt}`);
 }
 
 console.log('\n' + (fails === 0 ? 'PASS: ALL CHECKS PASSED — declared math verified.' : `FAIL: ${fails} check(s) failed.`));

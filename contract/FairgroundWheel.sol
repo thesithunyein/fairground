@@ -27,6 +27,10 @@ import { ICasinoGameV2, SessionContext, SessionPhase, StepResult } from "../soli
 ///   On the legal space λ ≥ 0.24e18 so 0.2 < 2λ < 6λ always holds.
 ///   Heaviest legal paint (N=16, 1 risky): RISKY ≈ 12.36× — light-tail for the
 ///   vault (max payout/wager < 100, risky probability ≥ 1/16 ≥ 0.1%).
+///   Body variance (quoteRiskParams) is quoted for real, not hardcoded: on the
+///   safest paints the MID tier also pays above 1× (2λ > 1), making it a second
+///   winning tier with genuine spread — see _bodyVarianceScaled. When mid pays at
+///   most the stake the risky tier is the sole winning tier and it is exactly 0.
 ///
 /// Randomness mapping (RANDOMNESS_DICE.md rules):
 ///   limit(N) = floor(256/N)·N; first byte < limit → segment = b % N.
@@ -47,6 +51,10 @@ contract FairgroundWheel is ICasinoGameV2 {
 
     error Fairground__BadGameData();
     error Fairground__IllegalPaint();
+    /// @dev Instant game: this contract never enters WAITING_PLAYER_ACTION, so
+    ///      onPlayerAction must never be reached. Distinct from BadGameData so a
+    ///      revert trace names the real fault instead of blaming the paint bytes.
+    error Fairground__NoPlayerActions();
 
     // ── gameData decoding ───────────────────────────────────────────────────
 
@@ -141,7 +149,7 @@ contract FairgroundWheel is ICasinoGameV2 {
             uint256 maxPayout,
             uint256 probabilityWad,
             uint256 expectedPayout,
-            uint256 subJackpotVarianceScaled
+            uint256 bodyVarianceScaled
         )
     {
         (uint256 segmentCount, uint256[] memory tiers) = _decodePaint(gameData);
@@ -152,7 +160,7 @@ contract FairgroundWheel is ICasinoGameV2 {
         maxPayout = (wager * risky_) / WAD;
         probabilityWad = (cRisky * WAD) / segmentCount; // risky tier win probability
         expectedPayout = (wager * RTP_WAD) / WAD; // exact by construction
-        subJackpotVarianceScaled = 0; // light-tail by design: heaviest paint ≈ 12.36×
+        bodyVarianceScaled = _bodyVarianceScaled(wager, segmentCount, tiers);
     }
 
     function onSessionStart(SessionContext calldata ctx) external view returns (StepResult memory stepResult) {
@@ -175,7 +183,10 @@ contract FairgroundWheel is ICasinoGameV2 {
     }
 
     function onPlayerAction(SessionContext calldata, bytes calldata) external pure returns (StepResult memory) {
-        revert Fairground__BadGameData(); // instant game — no player steps
+        // Instant game — no player steps. The session never enters
+        // WAITING_PLAYER_ACTION, so a host calling this is a protocol-level bug,
+        // not a bad paint. Name it that way in the revert trace.
+        revert Fairground__NoPlayerActions();
     }
 
     function onRandomness(SessionContext calldata ctx, bytes32 randomness)
@@ -238,12 +249,32 @@ contract FairgroundWheel is ICasinoGameV2 {
         return (wager * risky_) / WAD;
     }
 
-    function _reservedProfitWad(uint256 wager, uint256 segmentCount, uint256[] memory tiers)
+    /// @notice Body variance: the variance of this bet's payout with the TOP
+    ///         (risky) tier removed, per bet, in the reserve's scaled units
+    ///         (wei² · 1e18), as `quoteRiskParams` must declare it.
+    ///
+    ///         The risky tier is the sole winning tier whenever MID pays at most
+    ///         the stake back (2λ ≤ 1), and then this is exactly 0 — matching the
+    ///         SDK definition for single-winning-tier games.
+    ///
+    ///         On the safest paints 2λ > 1, so MID is a SECOND winning tier and
+    ///         carries real spread. With p = cMid/N and mid payout X, the non-top
+    ///         payout is W = X·Bernoulli(p), hence
+    ///             Var(W) = p(1−p)·X² = cMid·(N−cMid)·X² / N².
+    ///         cMid·(N−cMid) ≤ 64 and N ≤ 16, so this stays far inside uint256 for
+    ///         any wager the vault will accept.
+    function _bodyVarianceScaled(uint256 wager, uint256 segmentCount, uint256[] memory tiers)
         private
         pure
         returns (uint256)
     {
-        uint256 maxPayout = _maxPayout(wager, segmentCount, tiers);
-        return maxPayout > wager ? maxPayout - wager : 0;
+        (, uint256 cMid, ) = _counts(tiers);
+        if (cMid == 0) return 0; // nothing between safe and risky: single-tier wheel
+        (, uint256 mid_, ) = _priceWheel(segmentCount, tiers);
+        if (mid_ <= WAD) return 0; // mid pays at most the stake: not a winning tier
+
+        uint256 payout = (wager * mid_) / WAD; // wei
+        uint256 n = segmentCount;
+        return (((cMid * (n - cMid)) * payout * payout) / (n * n)) * WAD;
     }
 }

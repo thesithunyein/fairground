@@ -163,6 +163,29 @@ export function probabilityWadFor(paint: Paint): bigint {
   return (tierCounts(paint)[2] * WAD) / n;
 }
 
+/**
+ * Body variance — mirrors `_bodyVarianceScaled` in the contract exactly.
+ *
+ * `ICasinoGameV2` defines `bodyVarianceScaled` as the variance of this bet's
+ * payout with the TOP tier removed, per bet, in wei²·1e18, and a game with a
+ * single winning tier returns 0.
+ *
+ * The risky tier is the top tier, so the removal leaves only MID:
+ *   - mid ≤ stake (2λ ≤ 1): no winning tier survives → exactly 0;
+ *   - mid > stake (2λ > 1): mid is a second winning tier, and with
+ *     p = cMid/N the surviving payout is W = X·Bernoulli(p), so
+ *     Var(W) = p(1−p)·X² = cMid·(N−cMid)·X² / N².
+ */
+export function bodyVarianceScaledFor(wager: bigint, paint: Paint): bigint {
+  const n = BigInt(paint.segmentCount);
+  const cMid = tierCounts(paint)[1];
+  if (cMid === 0n) return 0n; // nothing between safe and risky
+  const { mid } = priceWheel(paint);
+  if (mid <= WAD) return 0n; // mid pays at most the stake: not a winning tier
+  const payout = (wager * mid) / WAD;
+  return (((cMid * (n - cMid)) * payout * payout) / (n * n)) * WAD;
+}
+
 // ── outcome: rejection-sampled uniform segment + prize roll ───────────────────
 // Mirrors _segmentFromRandomness: for N segments, limit = floor(256/N)·N;
 // accept the first byte < limit, segment = b % N (exactly uniform).

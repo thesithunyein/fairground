@@ -44,7 +44,7 @@ const HOST_ABI = [
   },
 ];
 const GAME_ABI = [
-  { name: 'quoteRiskParams', type: 'function', stateMutability: 'view', inputs: [{ name: 'w', type: 'uint256' }, { name: 'd', type: 'bytes' }], outputs: [{ name: 'maxPayout', type: 'uint256' }, { name: 'probabilityWad', type: 'uint256' }, { name: 'expectedPayout', type: 'uint256' }, { name: 'subVar', type: 'uint256' }] },
+  { name: 'quoteRiskParams', type: 'function', stateMutability: 'view', inputs: [{ name: 'w', type: 'uint256' }, { name: 'd', type: 'bytes' }], outputs: [{ name: 'maxPayout', type: 'uint256' }, { name: 'probabilityWad', type: 'uint256' }, { name: 'expectedPayout', type: 'uint256' }, { name: 'bodyVarianceScaled', type: 'uint256' }] },
   { name: 'quoteCaps', type: 'function', stateMutability: 'view', inputs: [{ name: 'w', type: 'uint256' }, { name: 'd', type: 'bytes' }], outputs: [{ name: 'maxEscrowStake', type: 'uint256' }, { name: 'maxReservedProfit', type: 'uint256' }] },
 ];
 const SETTLED_EVENT = {

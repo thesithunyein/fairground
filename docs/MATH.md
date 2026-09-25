@@ -37,17 +37,18 @@ RISKY = 6λ               (derived)
 
 Because there is exactly **one** linear equation and exactly **one** free variable λ, **every legal paint returns exactly 96% before floor rounding.** The floor remainder (≤ a few thousandths of a cent per spin) goes to the house, so realized RTP is **at least 93% and at most 96.00%**, always inside the declared window, and the verifier shows it at ≈ 95.99–96.00%.
 
-**Ordering guarantee.** On the legal space, `λ ≥ 0.24` in WAD terms:
+**Ordering guarantee.** On the legal space, `λ ≥ 0.24`:
 
-- worst case for λ: `N = 8, cS = 0, cM = 3, cR = 5` → wait, that violates rule 4 (`2·5 > 8`); the true worst cases are `cM = 3, cR = 1..4` with N = 8; the minimum of `(0.96·8 − 0.2·cS)/(2·cM + 6·cR)` over all legal paints is **0.24**, reached at `N=8, cS=0, cM=4, cR=4` → `7.68/32 = 0.24`.
+- the minimum of `(0.96·N − 0.2·cS)/(2·cM + 6·cR)` over every legal paint is **0.24**, reached at `N = 8, cS = 0, cM = 4, cR = 4` → `7.68/32 = 0.24`.
+- rule 4 (`2·cR ≤ N`) is what holds this floor up: it excludes paints such as `N = 8, cM = 3, cR = 5`, where risky would cover 62.5% of the wheel and λ would fall to `7.68/36 ≈ 0.213`.
 
 Therefore on every legal paint: `SAFE = 0.2 < MID = 2λ ≥ 0.48 < RISKY = 6λ ≥ 1.44`. Safe is always the cushion, risky always pays at least 1.44×. No edge cases exist.
 
 **Maximum multiplier.** The heaviest legal paint is `N=16, cR=1, cM=0, cS=15` → `λ = (15.36 − 3)/6 = 2.06` → `RISKY = 12.36×`. Global max ≈ **12.36×**.
 
-## 4. Vault risk (heavy-tail analysis)
+## 4. Vault risk
 
-The facet triggers the tiered jackpot-reserve path when `maxPayout/wager > 100` **and** win probability < 0.1%. FAIRGROUND's worst case: multiplier 12.36× (< 100) and risky probability ≥ 1/16 = 6.25% (≥ 0.1%). **Both thresholds are comfortably unmet → simple single-tier VaR path**, `subJackpotVarianceScaled = 0`.
+The facet triggers the tiered jackpot-reserve path when `maxPayout/wager > 100` **and** win probability < 0.1%. FAIRGROUND's worst case: multiplier 12.36× (< 100) and risky probability ≥ 1/16 = 6.25% (≥ 0.1%). **Both thresholds are comfortably unmet → the simple VaR path**, with no σ floor required.
 
 `quoteRiskParams` declared vs actual:
 
@@ -56,6 +57,24 @@ The facet triggers the tiered jackpot-reserve path when `maxPayout/wager > 100` 
 | `maxPayout` | `wager · RISKY / WAD` | risky-tier payout, the maximum of the three tiers |
 | `probabilityWad` | `cRisky·WAD / N` | exactly the chance the landed segment is risky |
 | `expectedPayout` | `wager · 0.96` | exact expectation of the payout distribution |
+| `bodyVarianceScaled` | `cMid·(N−cMid)·X²·1e18 / N²` | variance of the payout with the top tier removed (below) |
+
+**Body variance (the fourth parameter).** `ICasinoGameV2` defines `bodyVarianceScaled` as the
+variance of this bet's payout **with the top tier removed**, per bet, in wei²·1e18. It is added
+to the top-tier binary variance for every bet, heavy-tail or not, and a game with a single
+winning tier returns `0`.
+
+The risky tier is the top tier here, so the removal leaves only the MID tier:
+
+- when `2λ ≤ 1`, mid pays at most the stake — it is **not** a winning tier, no payout survives
+the top-tier removal, and the declared value is exactly **0**;
+- when `2λ > 1`, mid **is** a second winning tier. With `p = cMid/N` and mid payout `X`, the
+surviving payout is `W = X·Bernoulli(p)`, so `Var(W) = p(1−p)·X² = cMid·(N−cMid)·X² / N²`.
+
+`2λ > 1` occurs on the safe-heavy paints — 63 of the 300 legal composition classes, worst case
+`N = 16, cS = 13, cM = 2, cR = 1` with mid at `2.552×` — so the contract computes this per paint
+rather than hardcoding zero. `scripts/verify-rtp.mjs` recomputes it from the closed form for
+every legal class and asserts the contract's arithmetic agrees.
 
 ## 5. Cosmetic prize roll (payout-neutral)
 
@@ -73,3 +92,4 @@ The byte **after** the accepted segment byte (or the segment byte itself if it w
 6. Monte-Carlo (≥ 200k spins over randomized legal paints): empirical RTP ∈ window
 7. prize-byte invariance: payout identical for all 256 prize rolls
 8. rejection-sampling uniformity: χ²-style bucket check within tolerance
+9. `bodyVarianceScaled` agrees with the closed form `cMid·(N−cMid)·X²·1e18 / N²` on every legal class, is positive exactly when some non-top tier pays above the stake (`2λ > 1`), and is zero when the risky tier is the only winning tier
