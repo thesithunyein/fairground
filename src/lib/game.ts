@@ -320,6 +320,24 @@ export function formatMultiplier(wad: bigint): string {
   return `${whole}.${frac.toString().padStart(2, '0')}×`;
 }
 
+/** Plain WAD value to `dp` decimals, no multiplier sign — for the proof strip,
+ *  where the reader needs the numbers the equation is actually made of. */
+export function formatWad(wad: bigint, dp = 3): string {
+  const scale = 10n ** BigInt(dp);
+  const whole = wad / WAD;
+  const frac = ((wad % WAD) * scale) / WAD;
+  return `${whole}.${frac.toString().padStart(dp, '0')}`;
+}
+
+/** WAD → percent to 2 decimals, ROUNDED. Every legal paint floors λ, so the
+ *  per-slice multipliers sum a few wei short of the exact target; truncating
+ *  here would print 95.99% and make the one number the whole game is about look
+ *  wrong. Rounded, it reads 96.00% — which is the true value to 2dp. */
+export function formatPercent(wad: bigint): string {
+  const scaled = (wad * 10_000n + WAD / 2n) / WAD; // 2dp of (wad × 100)
+  return `${scaled / 100n}.${(scaled % 100n).toString().padStart(2, '0')}`;
+}
+
 export function keccakOf(bytes: Uint8Array): HexString {
   return keccak256(bytes);
 }

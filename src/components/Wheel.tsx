@@ -46,6 +46,7 @@ export function Wheel({
   livery,
   interactive,
   onTickSound,
+  onCreep,
   onLand,
   heavyShake,
 }: {
@@ -58,6 +59,8 @@ export function Wheel({
   livery: string;
   interactive: boolean;
   onTickSound?: (speed01: number) => void;
+  /** fired once per spin, the moment the launch ends and the creep begins */
+  onCreep?: () => void;
   onLand?: () => void;
   /** a risky win lands harder than a plain one */
   heavyShake?: boolean;
@@ -67,6 +70,7 @@ export function Wheel({
   const rafRef = useRef(0);
   const lastTickRef = useRef(0);
   const lastAngleRef = useRef(0);
+  const creepFiredRef = useRef(false);
   const animRef = useRef({ from: 0, to: 0, start: 0, dur: 0 });
   const [pointerKick, setPointerKick] = useState(0); // peg-flex while spinning
 
@@ -101,6 +105,7 @@ export function Wheel({
 
     animRef.current = { from, to, start: performance.now(), dur };
     lastAngleRef.current = current;
+    creepFiredRef.current = false;
     setPhase('spinning');
 
     const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4);
@@ -110,6 +115,11 @@ export function Wheel({
     const step = (now: number) => {
       const a = animRef.current;
       const t = Math.min(1, (now - a.start) / a.dur);
+      // the creep gets its own tension bed, once, as the launch hands over
+      if (t >= mainT && !creepFiredRef.current) {
+        creepFiredRef.current = true;
+        onCreep?.();
+      }
       // three phases: reverse pull, long decelerating launch, final creep
       const p = t < windupT
         ? (-WINDUP_DEG * (1 - t / windupT)) / (a.to - a.from) // windup segment

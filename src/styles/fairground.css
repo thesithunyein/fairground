@@ -351,6 +351,46 @@ body {
 .paint-readout b { color: var(--ink); }
 .paint-readout .stamp { margin-left: auto; }
 
+/* The proof strip: the pricing equation and the return identity, rewritten on
+   every paint. Monospace and wrapping rather than scrolling, so it survives the
+   gallery's narrow hover cartridge without ever pushing the page wider. */
+.paint-proof {
+  margin-top: 7px;
+  padding: 8px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: var(--paper-blue);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.pp-row {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+.pp-tag {
+  flex: 0 0 auto;
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--ink);
+}
+.pp-row code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10.5px;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+.pp-row code b { color: var(--ink); }
+.pp-row code .pp-ok { color: var(--green); }
+
 /* a refused paint: the panel gives one short shake and says why */
 .panel.nope { animation: nopeShake 0.4s ease-out; }
 @keyframes nopeShake {

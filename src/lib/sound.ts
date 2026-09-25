@@ -79,15 +79,44 @@ function noise(dur: number, vol: number, delay = 0, hp = 800): void {
   src.start(t0);
 }
 
-/** One ratchet tick — pitch rises with wheel speed. */
+// Two peg voices alternating around the rim, so the ratchet reads as a wheel
+// striking pegs rather than one oscillator changing pitch.
+let pegFlip = 0;
+
+/** One ratchet tick — two alternating peg voices, pitch rising with speed.
+ *  Speed comes from how far the rim actually moved, so the ticks thin out and
+ *  drop in pitch through the final creep instead of lying about the motion. */
 export function tick(speed01: number): void {
-  tone(700 + 900 * speed01, 0.03, 'square', 0.05 + 0.05 * speed01);
+  pegFlip ^= 1;
+  const base = 660 + 880 * speed01;
+  const f = pegFlip ? base : base * 0.74; // clack / tock
+  tone(f, pegFlip ? 0.026 : 0.036, 'square', 0.04 + 0.05 * speed01);
+  if (speed01 > 0.55) {
+    // the rim's body while it is really moving
+    tone(f * 0.5, 0.05, 'triangle', 0.03 + 0.03 * speed01);
+  }
 }
 
 /** Wooden clack when the wheel lands. */
 export function land(): void {
   noise(0.09, 0.5, 0, 400);
   tone(180, 0.12, 'triangle', 0.35, 0, 90);
+}
+
+/** Heavier landing for a risky hit: the clack plus a floor thump, so the
+ *  biggest slice on the wheel is also the heaviest thing you hear. */
+export function landHeavy(): void {
+  noise(0.13, 0.55, 0, 320);
+  tone(180, 0.14, 'triangle', 0.38, 0, 84);
+  tone(72, 0.32, 'sine', 0.3, 0.01, 44);
+}
+
+/** The creep's tension bed: a low swell that leans in as the wheel inches over
+ *  its last few degrees. Fired once per spin, when the launch ends. */
+export function tensionSwell(): void {
+  tone(80, 0.62, 'sine', 0.16, 0, 128);
+  tone(160, 0.62, 'triangle', 0.07, 0.03, 256);
+  noise(0.5, 0.05, 0, 2600);
 }
 
 /** Result sting — different flavor per tier. */

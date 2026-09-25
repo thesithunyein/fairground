@@ -14,6 +14,12 @@ import {
   presetOf,
   tierCounts,
   PAINT_PRESETS,
+  formatWad,
+  formatPercent,
+  RTP_WAD,
+  SAFE_ANCHOR_WAD,
+  MID_WEIGHT,
+  RISKY_WEIGHT,
   type Paint,
   type PaintPresetId,
   type Tier,
@@ -267,7 +273,8 @@ export default function App() {
   });
   const [confetti, setConfetti] = useState(0); // increments to fire the legendary burst
   const [copied, setCopied] = useState(false);
-  const [nearMiss, setNearMiss] = useState(false); // landed adjacent to risky
+  const [nearMiss, setNearMiss] = useState(false); // landed one slice off risky
+  const [gapToRisky, setGapToRisky] = useState<number | null>(null); // rim distance to the nearest risky slice
   const [err, setErr] = useState('');
   const roundRef = useRef<Round | null>(null);
   const placingRef = useRef(false); // guards double-tap double-bet
@@ -307,6 +314,13 @@ export default function App() {
   const midCount = Number(counts[1]);
   const safeCount = Number(counts[0]);
   const activePreset = presetOf(paint);
+  // The proof strip is derived, never hardcoded: λ is the one free variable of
+  // the pricing equation, and the return shown is whatever the resulting prices
+  // actually produce — the same integers the contract pays out.
+  const lambdaWad = prices.mid / MID_WEIGHT;
+  const rtpWad = (
+    prices.safe * BigInt(safeCount) + prices.mid * BigInt(midCount) + prices.risky * BigInt(riskyCount)
+  ) / BigInt(paint.segmentCount);
   // a risky win gets the heavy landing shake; the wheel reads the last result
   const heavyShake = !!result && result.won && result.tier === 2;
 
@@ -377,14 +391,24 @@ export default function App() {
     setResult({ segment, tier: outcome.tier, payout: outcome.payout, won, prize: outcome.prize });
     setRound(null);
     setPendingSegment(null);
-    sfx.land();
+    // the biggest slice on the wheel gets the heaviest landing
+    if (won && outcome.tier === 2) sfx.landHeavy(); else sfx.land();
     // a risky win lands harder: short taps on a plain land, a small pattern on a win
     buzz(won && outcome.tier === 2 ? [18, 40, 90] : 12);
     window.setTimeout(() => sfx.sting(outcome.tier, won, outcome.multiplierWad >= 4n), 140);
 
-    // near-miss drama: a losing spin that stopped directly NEXT to a risky wedge
-    const adjacent = [segment - 1 < 0 ? paint.tiers.length - 1 : segment - 1, (segment + 1) % paint.tiers.length];
-    if (!won && adjacent.some(i => r.paint.tiers[i] === 2)) {
+    // Near-miss drama, measured rather than assumed: how many slices around the
+    // rim the pointer stopped from the nearest risky wedge. One slice off is a
+    // different feeling to five, and naming the gap is what makes the miss land.
+    const sliceCount = r.paint.tiers.length;
+    let gap = sliceCount;
+    r.paint.tiers.forEach((t, i) => {
+      if (t !== 2) return;
+      const d = Math.min(Math.abs(i - segment), sliceCount - Math.abs(i - segment));
+      if (d < gap) gap = d;
+    });
+    setGapToRisky(gap);
+    if (!won && gap === 1) {
       setNearMiss(true);
       window.setTimeout(() => sfx.nearMiss(), 620);
       window.setTimeout(() => setNearMiss(false), 2400);
@@ -507,6 +531,7 @@ export default function App() {
       const rt: Round = { wager, paint, pending: true };
       setRound(rt);
       setResult(null);
+      setGapToRisky(null);
       // hand the round to the land callback straight away: the timer below can
       // otherwise fire before React has committed the state
       roundRef.current = rt;
@@ -787,6 +812,7 @@ export default function App() {
             livery={collection.activeLivery}
             interactive={!round}
             onTickSound={(s01) => sfx.tick(s01)}
+            onCreep={() => sfx.tensionSwell()}
             onLand={onWheelLand}
             heavyShake={heavyShake}
           />
@@ -830,7 +856,33 @@ export default function App() {
             <span><b>{riskyCount}</b> of {paint.segmentCount} risky</span>
             <span>risky pays <b>{formatMultiplier(prices.risky)}</b></span>
             <span>mid <b>{formatMultiplier(prices.mid)}</b></span>
-            <span className="stamp">RTP 96.00%</span>
+            <span className="stamp">RTP {formatPercent(rtpWad)}%</span>
+          </div>
+
+          {/* The most original thing in this game, kept on the surface instead
+              of buried in the repo: the one free variable, the identity it is
+              solved from, and the return those numbers produce. Every tap
+              rewrites both rows, so the invariant is visible in five seconds. */}
+          <div className="paint-proof" aria-live="polite">
+            <div className="pp-row">
+              <span className="pp-tag">λ</span>
+              <code>
+                ({formatWad(RTP_WAD, 2)}·{paint.segmentCount}
+                {' − '}{formatWad(SAFE_ANCHOR_WAD, 2)}·{safeCount})
+                {' ÷ '}({MID_WEIGHT.toString()}·{midCount} + {RISKY_WEIGHT.toString()}·{riskyCount})
+                {' = '}<b>{formatWad(lambdaWad, 3)}</b>
+              </code>
+            </div>
+            <div className="pp-row">
+              <span className="pp-tag">RTP</span>
+              <code>
+                ({formatWad(prices.safe, 2)}·{safeCount}
+                {' + '}{formatWad(prices.mid, 2)}·{midCount}
+                {' + '}{formatWad(prices.risky, 2)}·{riskyCount})
+                {' ÷ '}{paint.segmentCount}
+                {' = '}<b className="pp-ok">{formatPercent(rtpWad)}%</b>
+              </code>
+            </div>
           </div>
 
           {paintNote && (
@@ -942,7 +994,14 @@ export default function App() {
             <div className={`result-banner ${result.won ? 'win' : nearMiss ? 'lose near' : 'lose'}`}>
               {result.won
                 ? <span>WIN <CountUpTo value={parseFloat(formatUnits(result.payout, decimals))} /> {symbol} · {result.tier === 2 ? 'RISKY' : result.tier === 1 ? 'MID' : 'SAFE'} paid</span>
-                : <span>{nearMiss ? 'SO CLOSE · landed next to risky. ' : `No win · landed ${result.tier === 2 ? 'risky' : result.tier === 1 ? 'mid' : 'safe'}. `}Repaint and go again.</span>
+                : <span>
+                    {nearMiss
+                      ? 'SO CLOSE · one slice off risky. '
+                      : gapToRisky !== null && gapToRisky <= 2
+                        ? `Missed by ${gapToRisky} · landed ${result.tier === 2 ? 'risky' : result.tier === 1 ? 'mid' : 'safe'}. `
+                        : `No win · landed ${result.tier === 2 ? 'risky' : result.tier === 1 ? 'mid' : 'safe'}. `}
+                    Repaint and go again.
+                  </span>
             }            </div>
           )}
 
