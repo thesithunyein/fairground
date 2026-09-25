@@ -66,6 +66,7 @@ export function Wheel({
   const [phase, setPhase] = useState<SpinPhase>('idle');
   const rafRef = useRef(0);
   const lastTickRef = useRef(0);
+  const lastAngleRef = useRef(0);
   const animRef = useRef({ from: 0, to: 0, start: 0, dur: 0 });
   const [pointerKick, setPointerKick] = useState(0); // peg-flex while spinning
 
@@ -88,32 +89,48 @@ export function Wheel({
     // claw-machine wind-up: pull back 16°, then launch
     const WINDUP_DEG = 16;
     const WINDUP_MS = 130;
+    // Risk is suspense. The wilder the paint, the longer the wheel takes to
+    // settle and the slower the last few degrees creep past the pointer — so
+    // GENTLE and WILD are not just different numbers, they feel different.
+    const CREEP_FRAC = 0.04; // share of the final travel spent creeping
+    const CREEP_MS = 560;
+    const riskyShare = paint.tiers.filter((t) => t === 2).length / paint.segmentCount;
     const from = current - WINDUP_DEG;
     const to = from + WINDUP_DEG + 360 * 5 + delta; // windup + 5 laps + landing
-    const dur = WINDUP_MS + 3400 + Math.random() * 500;
+    const dur = WINDUP_MS + 3000 + riskyShare * 1800 + Math.random() * 420 + CREEP_MS;
 
     animRef.current = { from, to, start: performance.now(), dur };
+    lastAngleRef.current = current;
     setPhase('spinning');
 
     const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4);
     const windupT = WINDUP_MS / dur;
+    const mainT = 1 - CREEP_MS / dur; // the long launch ends here; the creep follows
 
     const step = (now: number) => {
       const a = animRef.current;
       const t = Math.min(1, (now - a.start) / a.dur);
-      // two-phase easing: quick reverse pull, then the long decelerating launch
+      // three phases: reverse pull, long decelerating launch, final creep
       const p = t < windupT
         ? (-WINDUP_DEG * (1 - t / windupT)) / (a.to - a.from) // windup segment
-        : windupT + (1 - windupT) * easeOutQuart((t - windupT) / (1 - windupT));
+        : t < mainT
+          ? (1 - CREEP_FRAC) * easeOutQuart((t - windupT) / (mainT - windupT))
+          : (1 - CREEP_FRAC) + CREEP_FRAC * ((t - mainT) / Math.max(1e-6, 1 - mainT));
       const angle = a.from + (a.to - a.from) * p;
       setRotation(angle);
 
+      // Speed is measured from how far the rim actually moved, not from the
+      // clock, so the peg ticks stay in step with the wheel all the way through
+      // the slow creep — where they thin out instead of lying about the speed.
+      const swept = Math.abs(angle - lastAngleRef.current);
+      lastAngleRef.current = angle;
+      const speed01 = Math.min(1, swept / 7);
+
       // pointer flexes on pegs while fast, settles as it slows
-      const speed01 = 1 - t;
       setPointerKick(t < 1 ? Math.sin(now / 26) * 9 * speed01 * speed01 : 0);
 
-      // ratchet ticks, pitch scaling with speed
-      if (now - lastTickRef.current > 30 + 240 * (1 - speed01)) {
+      // one ratchet tick per peg crossing, pitch scaling with speed
+      if (now - lastTickRef.current > 26 && swept > 0.4) {
         lastTickRef.current = now;
         onTickSound?.(speed01);
       }

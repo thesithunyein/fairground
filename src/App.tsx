@@ -253,8 +253,17 @@ export default function App() {
   // The "how to play" modal. Open on a first visit, dismissible, and reopenable
   // at any time from the header "?" button, so newcomers get walked through the
   // loop while returning players keep a clean booth.
+  //
+  // Except when we are framed: the jam gallery plays this page inside a narrow
+  // hover cartridge, and a 560px instructions modal there covers the wheel and
+  // reads as a loading screen. Embedded visitors get the wheel plus the FIRST
+  // LOOP checklist instead, and the moment they open the URL directly they get
+  // the full walkthrough — the hint flag is deliberately left unwritten here.
   const [howOpen, setHowOpen] = useState(() => {
-    try { return localStorage.getItem('fg_hint_done') !== '1'; } catch { return false; }
+    try {
+      if (window.self !== window.top) return false; // inside the gallery cartridge
+      return localStorage.getItem('fg_hint_done') !== '1';
+    } catch { return false; }
   });
   const [confetti, setConfetti] = useState(0); // increments to fire the legendary burst
   const [copied, setCopied] = useState(false);
