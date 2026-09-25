@@ -215,6 +215,23 @@ export function Wheel({
               </g>
             );
           })}
+          {/* Rim pegs at every slice boundary. This is the ratchet you hear in
+              tick(), and they turn with the wheel, so the pointer is genuinely
+              being knocked as each peg passes rather than flexing on a timer. */}
+          {Array.from({ length: N }, (_, i) => {
+            const a = ((i * segAngle - 90) * Math.PI) / 180;
+            const rr = R + rim / 2 - 4;
+            return (
+              <circle
+                key={`peg-${i}`}
+                cx={Number((cx + rr * Math.cos(a)).toFixed(2))}
+                cy={Number((cy + rr * Math.sin(a)).toFixed(2))}
+                r="3.4"
+                fill="#141414"
+              />
+            );
+          })}
+
           {/* hub — center dot wears the livery's risky color */}
           <circle cx={cx} cy={cy} r="34" fill="#fffdf7" stroke="#141414" strokeWidth="4" />
           <circle cx={cx} cy={cy} r="10" fill={colors[2].fill} stroke="#141414" strokeWidth="2" />
