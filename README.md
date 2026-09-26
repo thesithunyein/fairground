@@ -21,6 +21,8 @@ A real-money on-chain casino game: the player paints the payout table of a prova
 
 Every casino wheel fixes the paytable and lets the house choose it. FAIRGROUND inverts that: the wheel is provably uniform, one VRF word per spin, rejection-sampled to an exactly even segment, and the player paints each slice safe, mid or risky before every spin. The Solidity contract derives the multipliers from the paint on-chain and pays out from them. The house cannot rig a paytable it does not set, and the player cannot buy odds: RTP is 96 percent for every legal paint, by construction.
 
+Then the wheel gives you a decision. Land a slice, and you can **bank** what it pays or **ride** it on a provably fair coin: heads doubles the win, tails loses it. The ride is an exact 1/2 bet with no house edge, so it changes the variance and never the odds — which means the one promise survives the choice: the round returns 96% whether you paint it gentle or wild, and whether you bank or ride.
+
 Real money mode runs inside chain.wtf through the official casino SDK bridge: the player's vault balance, the host's bet limits, on-chain settlement. The guest follows the host's `ui.theme` snapshot, so it renders the dark booth inside a dark host app and keeps the light carnival identity everywhere it is opened directly. The same build opened standalone runs a labeled free-play mode, which is what the jam gallery and judges see.
 
 ## How the math stays honest
@@ -31,7 +33,8 @@ Real money mode runs inside chain.wtf through the official casino SDK bridge: th
 | RTP exactly 96% for any paint | Slices price as SAFE = 0.2x, MID = 2L, RISKY = 6L with L = (0.96N - 0.2 cSafe) / (2 cMid + 6 cRisky). One linear equation per paint. |
 | Contract trusts nothing from the client | Multipliers are recomputed inside FairgroundWheel.sol from the 9-byte paint. The browser only mirrors the math for previews. |
 | Cosmetics cannot touch payouts | Prize drops derive from leftover VRF bytes and are proven payout-invariant by test. |
-| Verified | 300 of 300 legal composition classes price to exactly 96 percent, Monte Carlo over ~2M spins lands at 95.85 percent, and 3 of 3 end-to-end rounds settle on a live VRF node with payouts exact to the wei. Full detail in [docs/MATH.md](docs/MATH.md). |
+| The ride cannot change the edge | Banking and riding have identical expectation (`E[ride] = ½·2m + ½·0 = m`), so `expectedPayout` is exact for **every strategy**, not just optimal play. |
+| Verified | 300 of 300 legal composition classes price to exactly 96 percent; both a banking and a riding Monte-Carlo land in window; the ride's fairness is enumerated over all 2N outcomes per class; and `scripts/e2e-round.mjs` settles a banked round, a ridden round in **both** coin outcomes, every declared quote and the forfeit quote on a live VRF node, exact to the wei. Full detail in [docs/MATH.md](docs/MATH.md). |
 
 ## How the booth is laid out
 
@@ -89,7 +92,7 @@ flowchart LR
     UI -.->|standalone: no host| D["Free-play mode<br/>labeled, seeded PRNG"]
 ```
 
-The instant game shape keeps the SDK surface minimal: open session, wait for randomness, settle. No player actions mid-round, nothing to time out.
+The round is one optional decision on top of an instant shape: open session, wait for the spin word, then **bank or ride**, and settle. The ride asks the host for a *second* VRF word, which is what makes the choice real — the coin cannot be read out of a word that does not exist yet.
 
 ## Project structure
 
@@ -125,10 +128,10 @@ fairground/
 
 ## Security
 
-- **Fairness is auditable in minutes.** One VRF word, one rejection-sampling loop, one linear pricing equation. The contract comments walk a reviewer through every step, and the settle-time reserved-profit rule (the classic instant-game trap) is documented where it bites.
-- **No keys, no wallets, no signatures in the client.** The browser holds no secrets and never talks to a chain directly in host mode; the SDK bridge and the host's facet handle escrow and settlement.
+- **Fairness is auditable in minutes.** One VRF word for the spin, a second for the ride coin, one rejection-sampling loop, one linear pricing equation. The contract comments walk a reviewer through every step, including the settle-time reserved-profit rule (the classic instant-game trap) and the multi-step reservation that must survive the decision.
+- **No keys, no wallets, no signatures in the client.** The browser holds no secrets and never talks to a chain directly in host mode; the SDK bridge and the host's facet handle escrow, the action step and settlement. The ride reveals nothing early: the player's choice is committed before the coin word is requested.
 - **Every input is validated on-chain.** Segment count, tier values, paint legality and the 16x multiplier cap all revert in the contract; illegal states are unreachable, not just hidden in the UI.
-- **Light tail by design.** The heaviest legal paint pays about 12.4x with a risky win probability of at least 1/16, comfortably inside the platform's heavy-tail thresholds.
+- **Light tail by design, worst case included.** The heaviest legal paint pays about 12.4x; the ride's ~24.7x worst case is still far inside the platform's 100x heavy-tail multiplier threshold, and the top payout lands with probability at least 3.125%, well above the 0.1% companion threshold. No sigma floor is needed.
 - **Cosmetics are non-financial.** Collection state lives in localStorage and cannot alter any payout, proven by test.
 - **Crash containment.** A render-level error boundary keeps a broken session from white-screening; player state survives in storage.
 
