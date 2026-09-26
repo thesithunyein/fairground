@@ -18,8 +18,27 @@ export const MID_WEIGHT = 2n;
 export const RISKY_WEIGHT = 6n;
 export const MAX_SEGMENTS = 16;
 export const MIN_SEGMENTS = 8;
-export const MAX_MULTIPLIER_WAD = 16n * WAD; // contract hard cap (real max ≈ 12.36×)
+export const MAX_MULTIPLIER_WAD = 16n * WAD; // contract hard cap on one tier (real max ≈ 12.36×)
+/** A winning ride doubles the landed multiplier, on an exactly fair coin flip. */
+export const RIDE_FACTOR = 2n;
+/** The ride coin wins on half the byte range — exactly 1/2, no bias, no rejection. */
+export const RIDE_WIN_LIMIT = 128;
+/** Worst-case payout multiplier of a whole round (the ride doubling the top tier).
+ *  Heaviest legal paint pays 12.36×, so a ridden round tops out at ≈ 24.72×. */
+export const MAX_ROUND_MULTIPLIER_X = 24.73;
 export const GAME_DATA_SIZE = 9; // 1 count byte + 8 paint bytes (2 segments per byte)
+export const GAME_STATE_SIZE = 96; // abi.encode(uint8 segmentCount, uint8 segment, uint8 stage)
+
+/** Round stages, mirrored from contract/FairgroundWheel.sol. */
+export const STAGE_SPIN = 0; // no segment yet — waiting for the spin word
+/** Awaiting a player action: the player may bank or ride. */
+export const STAGE_DECIDE = 1;
+export const STAGE_RIDE = 2; // a ride is in flight — waiting for the coin word
+export const STAGE_BANKED = 3;
+export const SEGMENT_UNKNOWN = 0xff;
+
+export const ACTION_BANK = 0;
+export const ACTION_RIDE = 1;
 
 export type Tier = 0 | 1 | 2; // 0 safe, 1 mid, 2 risky
 export type ToyRarity = 'common' | 'rare' | 'legendary';
@@ -149,8 +168,9 @@ export function expectedPayoutWad(wager: bigint, paint: Paint): bigint {
 
 // ── risk quoting (mirrors contract quoteRiskParams) ──────────────────────────
 
+/** Worst-case payout of a whole round: the ride doubling the heaviest tier. */
 export function maxPayoutFor(wager: bigint, paint: Paint): bigint {
-  return (wager * priceWheel(paint).risky) / WAD;
+  return RIDE_FACTOR * ((wager * priceWheel(paint).risky) / WAD);
 }
 
 export function maxReservedProfitFor(wager: bigint, paint: Paint): bigint {
@@ -158,9 +178,52 @@ export function maxReservedProfitFor(wager: bigint, paint: Paint): bigint {
   return payout > wager ? payout - wager : 0n;
 }
 
+/** Probability of the top payout — the heaviest tier AND a winning coin: cRisky/N · 1/2. */
 export function probabilityWadFor(paint: Paint): bigint {
   const n = BigInt(paint.segmentCount);
-  return (tierCounts(paint)[2] * WAD) / n;
+  return (tierCounts(paint)[2] * WAD) / (RIDE_FACTOR * n);
+}
+
+/** The banked payout for a landed segment — the value the player holds when deciding. */
+export function bankedPayout(wager: bigint, paint: Paint, segment: number): bigint {
+  const tier = paint.tiers[segment];
+  const prices = priceWheel(paint);
+  const multiplier = tier === 0 ? prices.safe : tier === 1 ? prices.mid : prices.risky;
+  return (wager * multiplier) / WAD;
+}
+
+/** The ride's payout: the banked amount doubled, or nothing at all. */
+export function ridePayout(banked: bigint, won: boolean): bigint {
+  return won ? RIDE_FACTOR * banked : 0n;
+}
+
+/** The ride coin: byte 0 of the ride word, fair by construction. */
+export function rideCoinWon(randomness: HexString): boolean {
+  return toBytes(randomness)[0] < RIDE_WIN_LIMIT;
+}
+
+// ── gameState (contract mirror) ──────────────────────────────────────────────
+// abi.encode(uint8 segmentCount, uint8 segment, uint8 stage); `segment` is
+// 0xff until the spin word lands.
+
+export function encodeGameState(segmentCount: number, segment: number, stage: number): HexString {
+  return encodeAbiParameters(
+    [{ type: 'uint8' }, { type: 'uint8' }, { type: 'uint8' }],
+    [segmentCount, segment, stage],
+  );
+}
+
+export function decodeGameState(gameState: HexString): { segment: number; stage: number } | null {
+  try {
+    if (toBytes(gameState).length !== GAME_STATE_SIZE) return null;
+    const [, segment, stage] = decodeAbiParameters(
+      [{ type: 'uint8' }, { type: 'uint8' }, { type: 'uint8' }],
+      gameState,
+    );
+    return { segment: Number(segment), stage: Number(stage) };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -170,20 +233,25 @@ export function probabilityWadFor(paint: Paint): bigint {
  * payout with the TOP tier removed, per bet, in wei²·1e18, and a game with a
  * single winning tier returns 0.
  *
- * The risky tier is the top tier, so the removal leaves only MID:
- *   - mid ≤ stake (2λ ≤ 1): no winning tier survives → exactly 0;
- *   - mid > stake (2λ > 1): mid is a second winning tier, and with
- *     p = cMid/N the surviving payout is W = X·Bernoulli(p), so
- *     Var(W) = p(1−p)·X² = cMid·(N−cMid)·X² / N².
+ * The risky tier is the top tier, so the removal leaves only SAFE and MID:
+ *   - the doubled mid still pays at most the stake (2λ ≤ 1): no winning tier
+ *     survives the removal → exactly 0;
+ *   - otherwise MID is a second winning tier. Taken under the worst-case policy
+ *     (the player rides), the surviving payout is the doubled mid multiplier
+ *     behind two independent, unbiased flips — B that MID is landed and K that
+ *     the fair ride wins. With E[K]=1, E[K²]=RIDE_FACTOR²/2=2 and p = cMid/N:
+ *       Var = X²·p·(2 − p) = cMid·(2N − cMid)·X² / N²
+ *     Dropping the ride's coin (K ≡ 1) recovers the bank-only p(1−p)·X².
  */
 export function bodyVarianceScaledFor(wager: bigint, paint: Paint): bigint {
   const n = BigInt(paint.segmentCount);
   const cMid = tierCounts(paint)[1];
   if (cMid === 0n) return 0n; // nothing between safe and risky
   const { mid } = priceWheel(paint);
-  if (mid <= WAD) return 0n; // mid pays at most the stake: not a winning tier
+  // the doubled mid must beat the stake to be a winning outcome at all
+  if (mid <= WAD / RIDE_FACTOR) return 0n;
   const payout = (wager * mid) / WAD;
-  return (((cMid * (n - cMid)) * payout * payout) / (n * n)) * WAD;
+  return (((payout * payout) * cMid * (2n * n - cMid)) / (n * n)) * WAD;
 }
 
 // ── outcome: rejection-sampled uniform segment + prize roll ───────────────────

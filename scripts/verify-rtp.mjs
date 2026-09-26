@@ -8,7 +8,12 @@
 //    rejection-sampled spins.
 // 3) Prize-byte invariance and rejection-sampling uniformity checks.
 // 5) Body variance (4th quoteRiskParams parameter): the contract's closed form
-//    against an independent brute-force variance of the top-tier-removed payout.
+//    against an independent brute-force variance of the top-tier-removed payout,
+//    taken under the worst-case policy (the player rides).
+// 6) The ride is EXACTLY fair: by brute-force enumeration of all 2N (segment,
+//    coin) outcomes, banking and riding have the same expectation, and it is the
+//    declared 96% for every legal paint — so the game has no optimal-play
+//    caveat and expectedPayout is honest for every strategy.
 
 let fails = 0;
 const ok = (cond, label) => {
@@ -93,6 +98,13 @@ for (let n = 8; n <= 16; n += 2) {
       ok(rtpWad >= 93n * (WAD / 100n), `rtp>=93% N=${n} (${cS},${cM},${cR})`);
       ok(risky < 100n * WAD, `mult<100x N=${n} (${cS},${cM},${cR})`);
       ok((BigInt(cR) * WAD) / BigInt(n) >= WAD / 1000n, `riskyProb>=0.1% N=${n} (${cS},${cM},${cR})`);
+      // The ride doubles the top tier and halves its probability. Both
+      // heavy-tail thresholds stay unmet, so the simple VaR path still holds.
+      ok(2n * risky < 100n * WAD, `round mult<100x N=${n} (${cS},${cM},${cR})`);
+      ok(
+        (BigInt(cR) * WAD) / (2n * BigInt(n)) >= WAD / 1000n,
+        `ride top prob>=0.1% N=${n} (${cS},${cM},${cR})`,
+      );
     }
   }
 }
@@ -103,7 +115,7 @@ console.log(`  RTP band (floor-truncated): ${(Number(minRtp) / 1e18) * 100}% .. 
 // ── 2) Monte-Carlo ───────────────────────────────────────────────────────────
 console.log('\n[2] Monte-Carlo: 250,000 spins over random legal paints...');
 const SPINS = 250_000;
-let wagered = 0n, returned = 0n;
+let wagered = 0n, returned = 0n, rideReturned = 0n;
 for (let spin = 0; spin < SPINS; spin++) {
   const n = [8, 10, 12, 14, 16][rndInt(5)];
   let tiers;
@@ -123,10 +135,17 @@ for (let spin = 0; spin < SPINS; spin++) {
   const mult = t === 0 ? safe : t === 1 ? mid : risky;
   wagered += wager;
   returned += (wager * mult) / WAD;
+  // The ride is a fair 1/2 coin on doubling the landed multiplier, so the same
+  // spins played as a rider must land in the same RTP window.
+  const banked = (wager * mult) / WAD;
+  rideReturned += rndByte() < 128 ? 2n * banked : 0n;
 }
 const mcRtpPct = (returned * 10000n) / wagered;
-console.log(`  empirical RTP: ${Number(mcRtpPct) / 100}% over ${SPINS} spins`);
-ok(mcRtpPct >= 9300n && mcRtpPct <= 9800n, 'MC RTP in [93%, 98%]');
+const mcRidePct = (rideReturned * 10000n) / wagered;
+console.log(`  empirical RTP (banking): ${Number(mcRtpPct) / 100}% over ${SPINS} spins`);
+console.log(`  empirical RTP (riding):  ${Number(mcRidePct) / 100}%`);
+ok(mcRtpPct >= 9300n && mcRtpPct <= 9800n, 'MC bank RTP in [93%, 98%]');
+ok(mcRidePct >= 9300n && mcRidePct <= 9800n, 'MC ride RTP in [93%, 98%]');
 
 // ── 3) prize-byte invariance ─────────────────────────────────────────────────
 console.log('\n[3] Prize-byte invariance: payout identical for all 256 prize rolls...');
@@ -167,36 +186,42 @@ console.log('\n[4] Rejection-sampling uniformity (N=12, 120k draws)...');
 // ── 5) body variance (quoteRiskParams, 4th parameter) ────────────────────────
 // The SDK defines bodyVarianceScaled as the variance of this bet's payout with
 // the TOP tier removed, per bet, in wei²·1e18; a single-winning-tier game returns
-// 0. The contract quotes it as a closed form. Here we recompute it two ways:
-//   (a) the contract's closed form  p(1−p)·X²·1e18,  p = cMid/N,  X = mid payout
-//   (b) an independent brute-force variance over the segment distribution with
-//       every risky (top tier) outcome forced to pay 0, in exact rational floats
-// and assert the contract is zero *exactly* when no non-top winning tier exists.
+// 0. The contract quotes it as a closed form, taken under the worst-case policy
+// (the player rides), because the host must commit risk before the player picks.
+// We recompute it two ways:
+//   (a) the contract's closed form  p·(2−p)·X²·1e18,  p = cMid/N,  X = mid payout
+//   (b) an independent brute-force variance over all 2N equally likely
+//       (segment, coin) outcomes, with every risky (top tier) outcome forced to 0
+// and assert the contract is zero *exactly* when no non-top winning outcome exists.
 console.log('\n[5] Body variance: closed form vs brute force, every legal class...');
 {
   const contractBody = (n, tiers, wager) => {
     const [, cM] = counts(tiers);
     if (cM === 0n) return 0n;
     const { mid } = priceWheel(n, tiers);
-    if (mid <= WAD) return 0n;
+    if (mid <= WAD / 2n) return 0n; // the doubled mid still cannot beat the stake
     const payout = (wager * mid) / WAD;
-    return (((cM * (BigInt(n) - cM)) * payout * payout) / (BigInt(n) * BigInt(n))) * WAD;
+    return (((payout * payout) * cM * (2n * BigInt(n) - cM)) / (BigInt(n) * BigInt(n))) * WAD;
   };
 
-  // Brute force: the "body" is the distribution of this bet's payout with the
-  // TOP tier removed, so (a) risky segments contribute nothing and (b) only
-  // payouts ABOVE the stake are wins — a partial return below the stake is a
-  // loss, which is why a single-winning-tier game comes out at exactly 0.
+  // Brute force: the "body" is the distribution of this round's payout with the
+  // TOP tier removed, under the worst-case policy (always ride). A ride is a fair
+  // 1/2 coin, so each segment contributes two equally likely outcomes; risky
+  // segments contribute nothing at all, and only payouts ABOVE the stake count as
+  // wins — which is why a single-winning-outcome game comes out at exactly 0.
   // Computed in floats from the exact integer price list; unit = wei²·1e18.
   const bruteBody = (n, tiers, wager) => {
     const { safe, mid } = priceWheel(n, tiers);
     const payout = (mult) => (wager * mult) / WAD; // wei, exact
-    const vals = tiers.map((t) => {
-      if (t === 2) return 0; // top tier removed
-      const p = payout(t === 0 ? safe : mid);
-      return p > wager ? Number(p) : 0; // only above-stake payouts are wins
-    });
-    const N = vals.length;
+    const vals = [];
+    for (const t of tiers) {
+      if (t === 2) { vals.push(0, 0); continue; } // top tier removed
+      const banked = payout(t === 0 ? safe : mid);
+      const ridden = 2n * banked; // the fair coin doubles it, or pays nothing
+      vals.push(0); // coin loses
+      vals.push(Number(ridden > wager ? ridden : 0n)); // coin wins, above stake only
+    }
+    const N = vals.length; // 2N equally likely outcomes
     const mean = vals.reduce((a, b) => a + b, 0) / N;
     const v = vals.reduce((a, b) => a + (b - mean) * (b - mean), 0) / N;
     return v * 1e18; // → wei²·1e18, the reserve's scaled units
@@ -216,9 +241,11 @@ console.log('\n[5] Body variance: closed form vs brute force, every legal class.
 
         // the SDK's rule: zero exactly when the risky tier is the sole winning tier
         const { mid, risky } = priceWheel(n, tiers);
-        const secondWinningTier = cM > 0 && mid > WAD;
+        // a second winning OUTCOME survives the top-tier removal exactly when the
+        // doubled mid payout beats the stake (the ride's coin is what doubles it)
+        const secondWinningOutcome = cM > 0 && 2n * ((wager * mid) / WAD) > wager;
         ok(
-          (quoted > 0n) === secondWinningTier,
+          (quoted > 0n) === secondWinningOutcome,
           `body var sign N=${n} (${cS},${cM},${cR}) mid=${mid} risky=${risky}`,
         );
         if (quoted > 0n) nonZero++;
@@ -230,8 +257,47 @@ console.log('\n[5] Body variance: closed form vs brute force, every legal class.
     }
   }
   console.log(`  legal classes checked: ${checked}`);
-  console.log(`  classes with non-zero body variance (mid is a second winning tier): ${nonZero}`);
+  console.log(`  classes with non-zero body variance (the doubled mid beats the stake): ${nonZero}`);
   console.log(`  worst relative deviation from brute force: ${(worstRel * 100).toExponential(2)}% at ${worstAt}`);
+}
+
+// ── 6) the ride is exactly fair, by enumeration ─────────────────────────────
+// The whole pitch rests on one line: RTP is 96% however you paint and whichever
+// way you play. That is only true because the ride is an exact 1/2 coin on the
+// banked amount. Enumerate every (segment, coin) outcome and compare the two
+// strategies head to head against the DECLARED expectedPayout.
+console.log('\n[6] Ride fairness: banking vs riding, every legal class...');
+{
+  let checked = 0, worst = 0, worstAt = null;
+  for (let n = 8; n <= 16; n += 2) {
+    for (let cR = 1; 2 * cR <= n; cR++) {
+      for (let cS = 0; cS + cR <= n; cS++) {
+        const cM = n - cS - cR;
+        const tiers = [...Array(cS).fill(0), ...Array(cM).fill(1), ...Array(cR).fill(2)];
+        if (!isLegal(n, tiers)) continue;
+        checked++;
+        const wager = WAD;
+        const { safe, mid, risky } = priceWheel(n, tiers);
+        const at = (t) => (wager * (t === 0 ? safe : t === 1 ? mid : risky)) / WAD;
+
+        // banking: N equally likely outcomes
+        const bankTotal = tiers.reduce((a, t) => a + at(t), 0n);
+        const bankMean = Number(bankTotal) / n;
+        // riding: 2N equally likely outcomes — a fair coin on doubling the landed amount
+        const rideTotal = tiers.reduce((a, t) => a + 2n * at(t), 0n); // losing half contributes 0
+        const rideMean = Number(rideTotal) / (2 * n);
+
+        const declared = Number(RTP_WAD); // expectedPayout = wager · RTP, in WAD units
+        const spread = Math.max(Math.abs(bankMean - declared), Math.abs(rideMean - declared));
+        const rel = spread / declared;
+        if (rel > worst) { worst = rel; worstAt = `N=${n} cS=${cS} cM=${cM} cR=${cR}`; }
+        // the only slack is the λ floor, which is a few thousandths of a percent
+        ok(rel < 1e-3, `ride fairness N=${n} (${cS},${cM},${cR}) rel=${rel}`);
+      }
+    }
+  }
+  console.log(`  legal classes checked: ${checked}`);
+  console.log(`  worst |strategy EV − declared 96%|: ${(worst * 100).toFixed(5)}% at ${worstAt}`);
 }
 
 console.log('\n' + (fails === 0 ? 'PASS: ALL CHECKS PASSED — declared math verified.' : `FAIL: ${fails} check(s) failed.`));
