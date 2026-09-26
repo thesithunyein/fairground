@@ -6,7 +6,7 @@
   "locales": {
     "en": {
       "name": "FAIRGROUND",
-      "description": "The honest carnival. Paint the payout tiers on a provably uniform wheel, spin once on VRF, and collect carnival prizes while the wheel stays fair. 96% RTP on every legal paint."
+      "description": "The honest carnival. Paint the payout tiers on a provably uniform wheel, spin on VRF, then bank your win or stake it on one provably fair coin. 96% RTP on every legal paint — and whether you bank or ride."
     }
   },
   "assets": {
@@ -23,8 +23,8 @@
   },
   "capabilities": {
     "openSession": true,
-    "submitAction": false,
-    "forfeitExpiredSession": false,
+    "submitAction": true,
+    "forfeitExpiredSession": true,
     "cancelStuckRandomness": false,
     "resize": true
   }
