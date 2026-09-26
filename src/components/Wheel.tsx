@@ -194,6 +194,7 @@ export function Wheel({
             return (
               <g
                 key={i}
+                className={interactive ? 'slice live' : 'slice'}
                 onClick={interactive && onPaintSegment ? () => onPaintSegment(i) : undefined}
                 style={{ cursor: interactive ? 'pointer' : 'default' }}
               >

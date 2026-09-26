@@ -182,3 +182,30 @@ export function streakRiser(streak: number): void {
   tone(base, 0.06, 'square', 0.09);
   tone(base * 1.26, 0.09, 'square', 0.1, 0.06);
 }
+
+/** The wheel has landed and the player now holds a real amount. */
+export function holdOffer(): void {
+  tone(196, 0.16, 'triangle', 0.16);
+  tone(294, 0.18, 'sine', 0.14, 0.08);
+  tone(392, 0.22, 'sine', 0.12, 0.16);
+}
+
+/** Fair coin in the air. */
+export function coinToss(): void {
+  noise(0.16, 0.12, 0, 1800);
+  tone(740, 0.07, 'square', 0.12);
+  tone(988, 0.09, 'square', 0.1, 0.07);
+  tone(640, 0.08, 'square', 0.08, 0.16);
+}
+
+export function coinWin(): void {
+  tone(523, 0.1, 'sine', 0.2);
+  tone(784, 0.14, 'sine', 0.2, 0.08);
+  tone(1047, 0.26, 'triangle', 0.24, 0.16);
+}
+
+export function coinLose(): void {
+  tone(220, 0.14, 'triangle', 0.16);
+  tone(147, 0.22, 'sine', 0.18, 0.1);
+  tone(98, 0.3, 'sine', 0.14, 0.2);
+}

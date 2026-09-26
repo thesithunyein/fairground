@@ -437,6 +437,36 @@ body {
 }
 .fair-deets a { color: var(--blue-deep); font-weight: 800; }
 
+.fair-deets .paint-proof { margin-top: 8px; }
+
+/* one-line first visit: never covers the wheel */
+.coach {
+  margin: 0;
+  padding: 9px 11px;
+  border: 2px dashed var(--ink);
+  border-radius: var(--radius);
+  background: var(--paper-gold);
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 700;
+  color: var(--ink);
+}
+.coach b { font-family: var(--font-pixel); font-size: 11px; letter-spacing: 0.04em; }
+.day-nudge {
+  width: 100%;
+  padding: 9px 11px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--paper-blue);
+  box-shadow: 2px 2px 0 var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--blue-deep);
+  cursor: pointer;
+  text-align: left;
+}
+.day-nudge:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
+
 /* the first-session checklist */
 .first-loop {
   display: flex;
@@ -510,6 +540,8 @@ body {
   place-items: center;
   padding: 4px 0 2px;
 }
+.wheel-svg .slice.live:hover path { filter: brightness(1.08); }
+.wheel-svg .slice.live:active path { filter: brightness(0.94); }
 .wheel-svg { width: min(100%, 430px); height: auto; display: block; }
 .pointer {
   position: absolute;
@@ -1076,7 +1108,8 @@ html, body { overflow-x: clip; } /* phones: never scroll sideways */
   .wheel-wrap.spun-shake.heavy .wheel-svg { animation: none; }
   .panel.nope { animation: none; }
   .prize-toast { animation: none; }
-  .howto-backdrop, .howto { animation: none; }
+  .howto-backdrop, .howto, .ride-overlay, .ride-sheet { animation: none; }
+  .coin-flip.flipping .cf-disc { animation: none; }
 }
 
 @media (max-width: 660px) {
@@ -1216,6 +1249,63 @@ html, body { overflow-x: clip; } /* phones: never scroll sideways */
   display: flex;
   align-items: center;
   min-height: 34px;
+}
+
+.ride-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 125;
+  display: grid;
+  place-items: end center;
+  padding: 12px 12px calc(86px + env(safe-area-inset-bottom, 0px));
+  background: rgba(20, 20, 20, 0.48);
+  animation: howtoFade 0.16s ease;
+}
+.ride-sheet {
+  width: min(420px, 100%);
+  padding: 16px 16px 14px;
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  background: var(--paper-gold);
+  box-shadow: 5px 5px 0 var(--ink);
+  animation: ride-in 0.2s ease-out;
+}
+.ride-kicker {
+  margin: 0 0 4px;
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.ride-sheet h3 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: 0.02em;
+}
+.ride-sub {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+.ride-sheet .rd-btns { margin-top: 14px; }
+.ride-sheet .rd-btns button { min-height: 52px; font-size: 16px; }
+.coin-flip.stage {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin: 0;
+  padding: 18px 8px 8px;
+  border: none;
+  background: transparent;
+  gap: 12px;
+}
+.coin-flip.stage .cf-disc { width: 72px; height: 72px; font-size: 28px; }
+.coin-flip.stage .cf-words { font-size: 16px; }
+@media (min-width: 661px) {
+  .ride-overlay { place-items: center; padding: 20px; }
 }
 
 /* ── the ride: bank it, or stake it on one provably fair coin ──────────

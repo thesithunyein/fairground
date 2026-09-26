@@ -19,7 +19,8 @@
   queries genuinely re-evaluate, then reports, per viewport: horizontal
   overflow, tap targets under 44px, the smallest rendered font, where SPIN and
   the nav land, how much scrolling the PLAY screen needs, and whether the
-  first-run card fits. The full result set is left on `window.__QA__`.
+  first-run coach sits on the table without a covering modal. The full result
+  set is left on `window.__QA__`.
 
   Open /qa-viewports.html on whatever is running (dev server, preview, or the
   deployed site) and watch the page fill in.
@@ -50,10 +51,8 @@ const SIZES = [
   { n: 'Landscape phone (844x390)', w: 844, h: 390 },
 ];
 const APP = '/?theme=light';
-// The first-run card is a fixed overlay and it is shown on a fresh origin, which
-// would hide the layout we are actually measuring. Dismiss it up front; it gets
-// measured on its own at the end.
 try { localStorage.setItem('fg_hint_done', '1'); } catch (e) { /* private mode */ }
+try { localStorage.setItem('fg_first_loop_v1', '1'); } catch (e) { /* private mode */ }
 
 function collect(doc, win) {
   const de = doc.documentElement;
@@ -149,27 +148,29 @@ function render(s, r) {
   return L.join('\n');
 }
 
-/* the first-run card, measured on its own: it only appears when the hint flag
-   is unset, so it needs a fresh pass with the flag cleared */
+/* first-run coach: one line on the table, never a covering card */
 async function measureFirstRun(w, h) {
   const stage = document.getElementById('stage');
   stage.width = w; stage.height = h;
   try { localStorage.removeItem('fg_hint_done'); } catch (e) { /* ignore */ }
+  try { localStorage.removeItem('fg_first_loop_v1'); } catch (e) { /* ignore */ }
   const wait = new Promise((res) => stage.addEventListener('load', res, { once: true }));
   stage.src = APP + '&first=' + Date.now();
   await wait;
   const t0 = Date.now();
   while (Date.now() - t0 < 25000) {
     const d = stage.contentDocument;
-    if (d && d.querySelector('.howto')) break;
+    if (d && d.querySelector('.coach') && d.querySelector('.spin-btn')) break;
     await new Promise(r => setTimeout(r, 200));
   }
   await new Promise(r => setTimeout(r, 250));
   const d = stage.contentDocument, win = stage.contentWindow;
-  const rect = (sel) => { const el = d.querySelector(sel); if (!el) return null; const r = el.getBoundingClientRect(); return Math.round(r.width) + 'x' + Math.round(r.height); };
-  const card = d.querySelector('.howto');
-  const fits = card ? (card.getBoundingClientRect().height <= win.innerHeight && card.getBoundingClientRect().width <= win.innerWidth) : false;
-  return w + 'x' + h + ': card ' + rect('.howto') + ' fits ' + fits + ' | close ' + rect('.howto-x') + ' | got-it ' + rect('.howto-ok');
+  const r = (sel) => { const el = d.querySelector(sel); if (!el) return null; const b = el.getBoundingClientRect(); return Math.round(b.width) + 'x' + Math.round(b.height) + ' y' + Math.round(b.y); };
+  const spin = d.querySelector('.spin-btn');
+  const sb = spin ? spin.getBoundingClientRect() : null;
+  const spinOnScreen = !!(sb && sb.bottom <= win.innerHeight + 1 && sb.height > 0);
+  const covered = !!d.querySelector('.howto-backdrop');
+  return w + 'x' + h + ': coach ' + r('.coach') + ' | spin ' + r('.spin-btn') + ' on-screen ' + spinOnScreen + ' | modal ' + covered;
 }
 
 async function run() {
@@ -180,7 +181,7 @@ async function run() {
     document.getElementById('head').textContent = s.n + ' done';
   }
   const firstRun = [await measureFirstRun(320, 568), await measureFirstRun(390, 844)];
-  out.innerHTML += 'FIRST-RUN CARD\n' + firstRun.join('\n') + '\n';
+  out.innerHTML += 'FIRST-RUN COACH\n' + firstRun.join('\n') + '\n';
   window.__QA__ = results;
   window.__FIRST_RUN__ = firstRun;
   document.getElementById('head').textContent = 'ALL DONE';
