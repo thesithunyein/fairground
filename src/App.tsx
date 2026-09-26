@@ -332,6 +332,15 @@ export default function App() {
   // a round the player has already been paid for — rebuilding it as an in-flight
   // one and wedging the booth on SPINNING with no way forward.
   const settledRef = useRef<Set<string>>(new Set());
+  // True once the wheel has actually landed for the current round. The demo
+  // stall watchdog keys off THIS, not a wall clock: a round where the player is
+  // deliberating, or waiting on the ride coin, is not a stall. Without it the
+  // watchdog fires mid-ride and wipes the round out from under its own result.
+  const landedRef = useRef(false);
+  // True once a VRF word has been seen for the current host round, so the
+  // host watchdog below can tell "node is slow" from "we already have it".
+  const wordRef = useRef(false);
+  const hostStallTimer = useRef(0);
   // Late-bound settle. `spinDemo` is memoised, and on the very first render the
   // bridge is still 'pending' so its captured `settle` closes over demo=false:
   // the opening spin after a reload would then skip the demo bank update and
@@ -418,6 +427,8 @@ export default function App() {
     const words = (row.raw?.randomnessRequests ?? []).filter(req => req.fulfilled && req.randomness);
     const spinWord = words[0]?.randomness ?? row.raw?.randomness;
     if (!spinWord) return; // no spin word yet: still waiting on the real VRF node
+    wordRef.current = true;
+    window.clearTimeout(hostStallTimer.current);
 
     const outcome = outcomeFromRandomness(round.wager, round.paint, spinWord);
     const landed = animatedRoundRef.current === sessionKey;
@@ -453,6 +464,7 @@ export default function App() {
       setPendingSegment(outcome.segment);
       setSpinNonce(n => n + 1);
       pendingResolveRef.current = () => {
+        landedRef.current = true;
         setDecision({
           segment: outcome.segment,
           tier: outcome.tier,
@@ -499,6 +511,7 @@ export default function App() {
     const r = roundRef.current;
     if (!r) return;
     if (r.sessionKey) settledRef.current.add(r.sessionKey);
+    window.clearTimeout(hostStallTimer.current);
     const payout = ride === null ? s.payout : ridePayout(s.payout, ride.won);
     const multiplierWad = ride === null ? s.multiplierWad : ride.won ? 2n * s.multiplierWad : 0n;
     const won = payout > 0n;
@@ -630,6 +643,7 @@ export default function App() {
     setSpinNonce(n => n + 1);
     // landing reveals the banked amount and offers the ride, exactly as the host does
     pendingResolveRef.current = () => {
+      landedRef.current = true;
       setDecision({
         segment: outcome.segment,
         tier: outcome.tier,
@@ -724,6 +738,9 @@ export default function App() {
       setCoinFlip('none');
       setRideBusy(false);
       animatedRoundRef.current = null; // a new round earns a fresh spin animation
+      landedRef.current = false;
+      wordRef.current = false;
+      window.clearTimeout(hostStallTimer.current);
       // hand the round to the land callback straight away: the timer below can
       // otherwise fire before React has committed the state
       roundRef.current = rt;
@@ -735,9 +752,11 @@ export default function App() {
         // ever leave the round open. If it does (a dropped frame, a tab
         // backgrounded mid-spin), free the booth rather than wedge SPIN.
         window.setTimeout(() => {
-          if (roundRef.current !== rt || decisionRef.current) return;
+          // only a spin that never LANDS is a stall — see landedRef
+          if (roundRef.current !== rt || landedRef.current) return;
           setRound(null);
           setPendingSegment(null);
+          setDecision(null);
           setErr('That spin stalled. Tap SPIN again.');
         }, 9000);
         return;
@@ -748,6 +767,17 @@ export default function App() {
         if (roundRef.current === rt) {
           setRound({ ...rt, sessionKey, pending: false });
           setLcd('WAITING FOR VRF...');
+          // A round whose word never arrives must not wedge the booth either.
+          // Freeing the local round is safe: the session is still live on the
+          // host, so the resume path picks it straight back up if it lands.
+          window.clearTimeout(hostStallTimer.current);
+          hostStallTimer.current = window.setTimeout(() => {
+            if (roundRef.current !== rt || wordRef.current) return;
+            setRound(null);
+            setPendingSegment(null);
+            setDecision(null);
+            setErr('The randomness node is slow. Tap SPIN to try again.');
+          }, 60_000);
         }
       } catch (e) {
         setRound(null);
