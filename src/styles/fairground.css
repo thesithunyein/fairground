@@ -1724,3 +1724,14 @@ body { background: var(--paper); }
   .tier-pill { font-size: 13px; }
   .tier-pill .mult { font-size: 13px; }
 }
+
+.brand-sub.demo { white-space: nowrap; }
+.tier-pill .dot { flex: 0 0 12px; width: 12px; height: 12px; }
+@media (min-width: 661px) {
+  /* the bet and SPIN sit beside the middle of the wheel, not at the top of an empty column */
+  .controls { align-self: center; }
+}
+@media (max-width: 660px) {
+  .brand-sub.demo { font-size: 10px; padding: 1px 7px; }
+  .paint-tools { width: 100%; }
+}
