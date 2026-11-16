@@ -183,7 +183,7 @@ export function Wheel({
     <div className={`wheel-wrap${phase === 'done' ? ` spun-shake${heavyShake ? ' heavy' : ''}` : ''}`}>
       <svg className="wheel-svg" viewBox="0 0 400 400" aria-label="FAIRGROUND prize wheel">
         {/* outer rim */}
-        <circle cx={cx} cy={cy} r={R + rim / 2} fill="#fffdf7" stroke="#141414" strokeWidth="5" />
+        <circle cx={cx} cy={cy} r={R + rim / 2} fill="#ffffff" />
         {/* fixed ink ring: the wheel is artwork, so this must not follow the
             host theme the way the page chrome does */}
         <circle cx={cx} cy={cy} r={R + rim / 2 - 7} fill="none" stroke="rgba(20, 20, 20, 0.14)" strokeWidth="2" />
@@ -198,19 +198,19 @@ export function Wheel({
                 onClick={interactive && onPaintSegment ? () => onPaintSegment(i) : undefined}
                 style={{ cursor: interactive ? 'pointer' : 'default' }}
               >
-                <path d={wedgePath(i)} fill={colors[t].fill} stroke="#141414" strokeWidth="3" />
+                <path d={wedgePath(i)} fill={colors[t].fill} stroke="#ffffff" strokeWidth="4" strokeLinejoin="round" />
                 <text
                   x={pos.x}
                   y={pos.y}
                   fill={colors[t].text}
-                  fontSize={N <= 10 ? 19 : N <= 12 ? 16 : 13}
-                  fontWeight="700"
-                  fontFamily="var(--font-pixel)"
+                  fontSize={N <= 10 ? 22 : N <= 12 ? 19 : 15}
+                  fontWeight="900"
+                  fontFamily="var(--font-ui)"
                   textAnchor="middle"
                   dominantBaseline="middle"
                   transform={`rotate(${(-rotation).toFixed(2)} ${pos.x.toFixed(2)} ${pos.y.toFixed(2)})`}
-                  stroke={colors[t].text === '#141414' ? 'rgba(255,255,255,0.35)' : 'rgba(20,20,20,0.45)'}
-                  strokeWidth="3"
+                  stroke={colors[t].text === '#141414' ? 'rgba(255,255,255,0.3)' : 'rgba(39,32,72,0.22)'}
+                  strokeWidth="2.5"
                   paintOrder="stroke"
                   style={{ pointerEvents: 'none' }}
                 >
@@ -230,19 +230,19 @@ export function Wheel({
                 key={`peg-${i}`}
                 cx={Number((cx + rr * Math.cos(a)).toFixed(2))}
                 cy={Number((cy + rr * Math.sin(a)).toFixed(2))}
-                r="3.4"
-                fill="#141414"
+                r="3"
+                fill="#d9d5f5"
               />
             );
           })}
 
           {/* hub — center dot wears the livery's risky color */}
-          <circle cx={cx} cy={cy} r="34" fill="#fffdf7" stroke="#141414" strokeWidth="4" />
-          <circle cx={cx} cy={cy} r="10" fill={colors[2].fill} stroke="#141414" strokeWidth="2" />
+          <circle cx={cx} cy={cy} r="32" fill="#ffffff" />
+          <circle cx={cx} cy={cy} r="11" fill={colors[2].fill} />
         </g>
 
         {/* static pointer hub cap */}
-        <circle cx={cx} cy={cy} r="5" fill="#e8442e" stroke="#141414" strokeWidth="2" />
+        <circle cx={cx} cy={cy} r="4" fill="#ffffff" />
       </svg>
 
       {/* winning wedge flash overlay */}
@@ -258,7 +258,7 @@ export function Wheel({
         width="44" height="30" viewBox="0 0 44 30" aria-hidden
         style={{ transform: `translateX(-50%) rotate(${pointerKick.toFixed(2)}deg)`, transformOrigin: '50% 100%' }}
       >
-        <path d="M22 28 L4 4 Q22 10 40 4 Z" fill="#e8442e" stroke="#141414" strokeWidth="3" strokeLinejoin="round" />
+        <path d="M22 28 L4 4 Q22 10 40 4 Z" fill="#272048" stroke="#ffffff" strokeWidth="3" strokeLinejoin="round" />
       </svg>
     </div>
   );

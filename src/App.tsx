@@ -1073,7 +1073,7 @@ export default function App() {
       >
         <section className={`panel${paintNote ? ' nope' : ''}`}>
           <div className="panel-title">
-            <h2>You paint the prizes</h2>
+            <h2>Paint your wheel</h2>
             <span className="paint-tools">
               <button type="button" className="tool-btn" disabled={!!round} onClick={cycleSegmentCount} title="change the number of slices">
                 {paint.segmentCount} slices
@@ -1226,14 +1226,13 @@ export default function App() {
 
           {/* the last few spins beside the LCD: the table readout a player
               expects, and a reminder that you can paint and go again */}
-          <div className="recent" aria-label="recent spins">
-            <span className="r-lbl">LAST</span>
-            {history.length === 0
-              ? <span className="r-empty">no spins yet</span>
-              : history.map((h, i) => (
+          {history.length > 0 && (
+            <div className="recent" aria-label="recent spins">
+              {history.map((h, i) => (
                 <span key={i} className={`r-chip t${h.tier}${h.won ? ' win' : ''}`}>{h.x}</span>
               ))}
-          </div>
+            </div>
+          )}
 
           <div className="panel bet-block">
             <div className="row">
@@ -1297,7 +1296,7 @@ export default function App() {
 
           {!firstLoopDone && !round && (
             <p className="coach" role="status">
-              <b>Paint a slice, then SPIN.</b> You set the prizes. The return stays ≈96%.
+              <b>Tap a slice to paint it, then spin.</b> You set the prizes.
             </p>
           )}
 
