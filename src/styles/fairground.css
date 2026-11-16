@@ -1537,3 +1537,14 @@ html, body { overflow-x: clip; } /* phones: never scroll sideways */
 @media (max-width: 350px) {
   .top { flex-wrap: wrap; }
 }
+
+@media (max-width: 660px) {
+  .brand-name { font-size: 13px; letter-spacing: 0.02em; }
+  .chip.balance { padding: 5px 8px; gap: 5px; }
+  /* the active tab is a tint, not a slab: the SPIN bar above it is the one loud thing */
+  .tab.on { background: var(--paper-blue); color: var(--blue-deep); border-color: transparent; }
+  .tab.on .t-badge { background: var(--paper-2); color: var(--ink-soft); }
+  /* three pills share one row: let the name and the price both fit */
+  .tier-pill { padding: 9px 7px; gap: 4px; font-size: 12.5px; min-width: 0; }
+  .tier-pill .mult { font-size: 11px; margin-left: auto; }
+}
