@@ -1947,3 +1947,96 @@ body { background: var(--sky) fixed; }
   .brand-sub.demo { display: inline-block; font-size: 10.5px; }
   .brand-sub:not(.demo) { display: none; }
 }
+
+/* ══ product pass: Collect, Daily, and a phone play dock ════════════════ */
+.screen.collect > .panel, .screen.daily > .panel { background: rgba(255, 255, 255, 0.94); padding: 22px; max-width: 640px; margin: 0 auto; }
+.screen-lead { border: 0; padding: 0; margin: 0 0 18px; font-size: 14.5px; font-weight: 700; line-height: 1.45; }
+.panel-title h2 { font-size: 22px; font-weight: 1000; }
+.panel-title .hint { font-size: 13px; font-weight: 800; }
+.album-open { font-family: var(--font-ui); font-size: 13px; font-weight: 900; letter-spacing: 0; border: 0; border-radius: 999px; background: var(--paper-blue); padding: 5px 12px; box-shadow: none; }
+.season-bar { height: 10px; border: 0; background: var(--paper); margin: 0 0 14px; }
+.season-bar i { background: linear-gradient(90deg, #7df05a, #12b524); border-radius: 999px; }
+
+.album-set { gap: 10px; margin-bottom: 20px; }
+.album-set-head { font-size: 15px; align-items: center; }
+.album-set-head b { letter-spacing: 0; font-weight: 900; }
+.album-set-head span { font-size: 13px; background: var(--paper); border-radius: 999px; padding: 2px 10px; }
+.album-set .shelf-row { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; justify-content: stretch; }
+.prize-cell { border: 0; border-radius: 18px; background: var(--paper); }
+.prize-cell > span { font-weight: 900; }
+.prize-cell.owned { border: 0; background: #fff; box-shadow: 0 4px 0 rgba(16, 52, 140, 0.12), 0 8px 18px rgba(16, 52, 140, 0.12); }
+.prize-cell.rare.owned { background: linear-gradient(180deg, #ffffff, #dcebff); }
+.prize-cell.legendary.owned { background: linear-gradient(180deg, #fffbe6, #ffe9a6); }
+.prize-cell .count { border: 2px solid #fff; background: var(--blue); }
+.prize-cell svg { width: 68%; height: 68%; }
+
+.livery-row { gap: 12px; margin-top: 4px; }
+.livery-dot { width: 44px; height: 44px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 3px 0 rgba(16, 52, 140, 0.16); }
+.livery-dot.classic { background: conic-gradient(#ff4f7b 0 33%, #22c93a 0 66%, #ffc21a 0); }
+.livery-dot.midway { background: conic-gradient(#2f6bff 0 33%, #ffd166 0 66%, #1d1f1e 0); }
+.livery-dot.mint { background: conic-gradient(#8fd6b4 0 33%, #2f9e44 0 66%, #116530 0); }
+.livery-dot.twilight { background: conic-gradient(#b99cff 0 33%, #7a4dff 0 66%, #3d1d8f 0); }
+.livery-dot.gilded { background: conic-gradient(#f2e2b0 0 33%, #f5b301 0 66%, #7a5c14 0); }
+.livery-dot.locked { opacity: 1; filter: none; background: var(--paper); }
+.livery-dot.active { outline: 3px solid var(--blue); outline-offset: 2px; }
+.shelf-progress { margin-top: 14px; font-size: 13px; font-weight: 700; }
+.shelf-progress .stamp { font-family: var(--font-ui); font-weight: 900; }
+
+.mission-list { gap: 10px; }
+.mission { grid-template-columns: 26px 1fr auto; gap: 6px 12px; font-size: 15px; background: var(--paper); border-radius: 18px; padding: 12px 14px; }
+.mission .m-tick { width: 26px; height: 26px; border-radius: 50%; border: 0; background: #fff; box-shadow: inset 0 0 0 2px var(--paper-2); }
+.mission .m-label { font-weight: 800; }
+.mission .m-count { font-family: var(--font-ui); font-size: 13px; font-weight: 900; }
+.mission .m-bar { height: 8px; border: 0; background: #fff; }
+.mission .m-bar i { border-radius: 999px; background: linear-gradient(90deg, #5aa2ff, #2f80ff); }
+.mission.done { background: var(--paper-green); }
+.mission.done .m-tick { background: #fff; box-shadow: none; }
+.ladder { gap: 8px; margin-top: 18px; }
+.rung { height: 40px; border: 0; border-radius: 50%; aspect-ratio: 1; flex: 0 1 40px; font-family: var(--font-ui); font-size: 14px; font-weight: 900; background: var(--paper); }
+.ladder { justify-content: space-between; }
+.rung.earned { background: linear-gradient(180deg, #ffe066, #ffb300); color: #6b3d00; }
+.rung.now { outline: 3px solid var(--blue); outline-offset: 2px; }
+.rung.trophy { background: linear-gradient(180deg, #ffe066, #ffb300); color: #6b3d00; }
+
+.howto-step { font-size: 14.5px; line-height: 1.4; }
+.howto-num { border: 0; }
+.ride-sub { font-size: 15px; }
+
+@media (max-width: 660px) {
+  .screen.collect > .panel, .screen.daily > .panel { padding: 18px 16px; }
+  .panel-title h2 { font-size: 20px; }
+
+  /* play: title and tools share a row; tools are icon-only */
+  .stage > .panel:first-child .panel-title { flex-wrap: nowrap; margin-bottom: 8px; }
+  .stage > .panel:first-child .panel-title h2 { flex: 1 1 auto; font-size: 18px; white-space: nowrap; }
+  .paint-tools { width: auto; flex-wrap: nowrap; justify-content: flex-end; }
+  .paint-tools .tl { display: none; }
+  .tool-btn { min-width: 44px; justify-content: center; padding: 8px 12px; }
+  .paint-presets { margin: 0 0 4px; }
+  .preset { min-height: 38px; }
+
+  /* the wheel is sized by height too, so the tier pills stay above the dock */
+  .wheel-wrap { padding: 12px 0 6px; }
+  .wheel-svg { width: min(100%, 340px, 42svh); }
+  .tier-row { margin-top: 4px; }
+  .fair-deets { margin-bottom: 4px; }
+
+  /* dock: stake on the left, SPIN on the right, one thumb row above the tabs */
+  .app { padding-bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }
+  .bet-block {
+    position: fixed; z-index: 41;
+    left: 10px; bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+    width: 150px; height: 62px;
+    padding: 6px; border-radius: 999px; border-width: 3px;
+    background: #fff; backdrop-filter: none;
+    box-shadow: 0 5px 0 rgba(16, 52, 140, 0.18), 0 12px 24px rgba(16, 52, 140, 0.25);
+  }
+  .bet-block .row { gap: 4px; height: 100%; align-items: center; }
+  .bet-block .half-double { width: 34px; min-width: 34px; height: 100%; min-height: 0; font-size: 13px; padding: 0; box-shadow: none; background: var(--paper); }
+  .bet-block .half-double.max, .bet-meta, .bet-input-wrap .unit { display: none; }
+  .bet-input-wrap { min-width: 0; padding: 0 2px; background: none; }
+  .bet-input-wrap input { height: auto; padding: 0; text-align: center; font-size: 18px; }
+  .spin-btn { left: 170px; right: 10px; bottom: calc(92px + env(safe-area-inset-bottom, 0px)); height: 62px; padding: 0 14px; font-size: 21px; }
+  .spin-btn:not(:disabled)::before, .spin-btn:not(:disabled)::after { display: none; }
+  .spin-btn:disabled { font-size: 13px; letter-spacing: 0; }
+}

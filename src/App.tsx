@@ -1018,9 +1018,9 @@ export default function App() {
             <div className="brand-name">FAIRGROUND</div>
             <div
               className={`brand-sub${demo && !CLEAN_MODE ? ' demo' : ''}`}
-              title={demo ? 'Free-play demo · the real game runs inside chain.wtf with your vault balance' : undefined}
+              title={demo ? 'Free play with practice chips. Play for real on chain.wtf.' : undefined}
             >
-              {demo && !CLEAN_MODE ? 'Free play · demo' : 'the honest carnival'}
+              {demo && !CLEAN_MODE ? 'Free play' : 'the honest carnival'}
             </div>
           </div>
         </div>
@@ -1297,7 +1297,7 @@ export default function App() {
 
           {!firstLoopDone && !round && (
             <p className="coach" role="status">
-              <b>Tap a slice to paint it, then spin.</b> You set the prizes.
+              <b>Tap a slice to paint it. Then spin.</b>
             </p>
           )}
 
@@ -1336,7 +1336,7 @@ export default function App() {
       >
         <div className="panel">
           <div className="panel-title">
-            <h2>Prize Album · Season 1</h2>
+            <h2>Prizes</h2>
             <span className="album-open">
               {album.have}/{album.total} collected
             </span>
@@ -1344,16 +1344,13 @@ export default function App() {
 
           <div className="season-bar"><i style={{ width: `${(album.have / album.total) * 100}%` }} /></div>
 
-          <p className="screen-lead">
-            Every spin drops a carnival prize. Fill all six of a set and the booth unlocks
-            its livery. Collecting never touches the odds: RTP stays ≈96% every spin.
-          </p>
+          <p className="screen-lead">Every spin drops a prize. Fill a set to unlock a new wheel style.</p>
 
           {album.sets.map(({ set, have, total, done }) => (
             <div key={set.id} className="album-set">
               <div className="album-set-head">
                 <b>{set.label}</b>
-                <span>{done ? `complete · ${set.rewardLabel} unlocked` : `${have}/${total} · unlocks the ${set.rewardLabel}`}</span>
+                <span>{done ? 'Complete' : `${have}/${total}`}</span>
               </div>
               <div className="shelf-row">
                 {TOY_NAMES.map((name, toy) => {
@@ -1393,9 +1390,8 @@ export default function App() {
             <span>
               {album.complete && collection.stamps.album
                 ? `season sealed · ${formatStamp(collection.stamps.album)}`
-                : 'wheel colours change with every complete set'}
+                : 'Finish a set to unlock a new wheel style.'}
             </span>
-            <span className="stamp">≈96% RTP always</span>
           </div>
         </div>
       </section>
@@ -1411,14 +1407,12 @@ export default function App() {
       >
         <div className="panel">
           <div className="panel-title">
-            <h2>Daily Booth</h2>
+            <h2>Daily goals</h2>
             <span className="hint">{doneToday}/3 today · day {ladder.day || 1}</span>
           </div>
 
           <p className="screen-lead">
-            Three objectives, fresh at midnight UTC. Bank all three and the run climbs a
-            rung: seven days in a row earns the gilded wheel. Stamps are cosmetic, so
-            none of this can change a wager, a multiplier or a payout.
+            Three goals a day. Finish all three for a stamp. Seven days in a row wins the gold wheel.
           </p>
 
           <div className="mission-list">
@@ -1448,7 +1442,7 @@ export default function App() {
           </div>
 
           <div className="shelf-progress">
-            <span>{dayState.dayComplete ? 'today is banked · stamps are cosmetic' : 'bank all three to climb the ladder'}</span>
+            <span>{dayState.dayComplete ? 'Done for today. Come back tomorrow.' : 'Finish all three to earn today’s stamp.'}</span>
             <span className="stamp">{ladder.badges.length} stamps</span>
           </div>
         </div>
@@ -1456,8 +1450,7 @@ export default function App() {
       </main>
 
       <footer className="fair-note">
-        <span>You paint the prizes. Bank or ride, the return stays ≈96%.</span>
-        <span className="stamp">RTP ≈96% · ENGINE 96.00%</span>
+        <span>Every paint returns about 96%. Rewards are for fun and never change the odds.</span>
       </footer>
 
       {(decision || coinFlip !== 'none') && (
@@ -1471,9 +1464,8 @@ export default function App() {
                 </p>
                 <h3 id="ride-title">You hold {formatExact(decision.cashOut, decimals)} {symbol}</h3>
                 <p className="ride-sub">
-                  Keep it, or flip a fair coin for double. Same ≈96% either way.{' '}
-                  <b>{decision.ridesLeft} ride{decision.ridesLeft === 1 ? '' : 's'} left</b> before the{' '}
-                  {(CAP_PRIZE / PRIZE_DENOMINATOR).toString()}× cap.
+                  Flip a fair coin to double it.{' '}
+                  <b>{decision.ridesLeft} double{decision.ridesLeft === 1 ? '' : 's'} left.</b>
                 </p>
                 <div className="rd-btns">
                   <button type="button" className="rd-bank" disabled={rideBusy} onClick={() => void chooseAction('bank')}>
@@ -1519,15 +1511,15 @@ export default function App() {
             <div className="howto-steps">
               <div className="howto-step paint">
                 <span className="howto-num">1</span>
-                <span><b>Paint.</b> Tap slices Safe, Mid or Risky. More risky pays less each — return stays ≈96%.</span>
+                <span><b>Paint.</b> Tap slices to make them Safe, Mid or Risky. More risky slices pay less each.</span>
               </div>
               <div className="howto-step spin">
                 <span className="howto-num">2</span>
-                <span><b>Spin.</b> Every slice is exactly as likely. Then keep the win, or flip a fair coin for double, again and again up to the 100× cap.</span>
+                <span><b>Spin.</b> Every slice has the same chance. Keep your win, or flip a fair coin to double it.</span>
               </div>
               <div className="howto-step collect">
                 <span className="howto-num">3</span>
-                <span><b>Collect.</b> Every spin drops a prize. Fill a set, unlock a livery. Cosmetics never change the odds.</span>
+                <span><b>Collect.</b> Every spin drops a prize. Fill a set to unlock a new wheel style.</span>
               </div>
             </div>
             <button className="howto-ok" type="button" onClick={dismissHow}>PLAY</button>
