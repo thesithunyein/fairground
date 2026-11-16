@@ -1941,3 +1941,9 @@ body { background: var(--sky) fixed; }
 .icon-btn .fg-icon { width: 20px; height: 20px; }
 .m-tick { display: grid; place-items: center; }
 @media (max-width: 660px) { .tab .t-icon .fg-icon { width: 26px; height: 26px; } }
+/* narrow phones: the mark carries the brand, the demo tag stays visible */
+@media (max-width: 430px) {
+  .brand-name { display: none; }
+  .brand-sub.demo { display: inline-block; font-size: 10.5px; }
+  .brand-sub:not(.demo) { display: none; }
+}
