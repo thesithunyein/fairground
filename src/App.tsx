@@ -47,6 +47,7 @@ import {
 import { useCasinoHost } from './lib/useCasinoHost';
 import { Wheel } from './components/Wheel';
 import { PrizeSprite, BootWheel, WheelBadge } from './components/Prizes';
+import { IconWheel, IconGem, IconTicket, IconDice, IconShare, IconSlices, IconSound, IconHelp, IconCheck, IconLock, IconClose, IconStar } from './components/Icons';
 import {
   albumProgress,
   loadCollection,
@@ -76,10 +77,10 @@ const CLEAN_MODE = new URLSearchParams(window.location.search).has('clean');
  */
 type ScreenId = 'play' | 'collect' | 'daily';
 
-const SCREENS: { id: ScreenId; label: string; icon: string }[] = [
-  { id: 'play', label: 'Play', icon: '🎡' },
-  { id: 'collect', label: 'Collect', icon: '🧸' },
-  { id: 'daily', label: 'Daily', icon: '🎟️' },
+const SCREENS: { id: ScreenId; label: string; icon: ReactNode }[] = [
+  { id: 'play', label: 'Play', icon: <IconWheel /> },
+  { id: 'collect', label: 'Collect', icon: <IconGem /> },
+  { id: 'daily', label: 'Daily', icon: <IconTicket /> },
 ];
 
 /**
@@ -1029,10 +1030,10 @@ export default function App() {
             {formatUnits(rawBalance, decimals)} <span className="lbl">{symbol}</span>
           </div>
           <button className="icon-btn" onClick={() => { sfx.click(); setHowOpen(true); }} aria-label="how to play" title="How to play">
-            ?
+            <IconHelp />
           </button>
           <button className="icon-btn" onClick={() => setMuted(sfx.toggleMute())} aria-label="toggle sound">
-            {muted ? '🔇' : '🔊'}
+            <IconSound muted={muted} />
           </button>
         </div>
       </header>
@@ -1076,13 +1077,13 @@ export default function App() {
             <h2>Paint your wheel</h2>
             <span className="paint-tools">
               <button type="button" className="tool-btn" disabled={!!round} onClick={cycleSegmentCount} title="change the number of slices">
-                {paint.segmentCount} slices
+                <IconSlices size={18} /> {paint.segmentCount}<span className="tl"> slices</span>
               </button>
               <button type="button" className="tool-btn" disabled={!!round} onClick={autoRepaint} title="random legal paint" aria-label="random legal paint">
-                🎲<span className="tl"> Shuffle</span>
+                <IconDice size={18} /><span className="tl"> Shuffle</span>
               </button>
               <button type="button" className="tool-btn" onClick={shareWheel} title="copy a link to this wheel">
-                {copied ? 'Copied ✓' : 'Share'}
+                {copied ? <><IconCheck size={18} /> Copied</> : <><IconShare size={18} /><span className="tl"> Share</span></>}
               </button>
             </span>
           </div>
@@ -1208,7 +1209,7 @@ export default function App() {
               <span><b>{stats.spins}</b> spins</span>
               <span className={stats.streak >= 3 ? 'hot' : ''}><b>{stats.streak}</b> streak</span>
               <span>best <b>{stats.bestWin}</b></span>
-              <span>day <b>{stats.dailyStreak}</b> 🔥</span>
+              <span>day <b>{stats.dailyStreak}</b></span>
             </div>
           )}
         </section>
@@ -1382,7 +1383,7 @@ export default function App() {
                   title={unlocked ? l.label : `${l.label}: ${l.unlockHint}`}
                   onClick={() => { if (unlocked) { sfx.click(); const c = { ...collection, activeLivery: l.id }; setCollection(c); saveCollection(c); } }}
                 >
-                  {unlocked ? '' : '🔒'}
+                  {unlocked ? null : <IconLock size={16} />}
                 </button>
               );
             })}
@@ -1425,7 +1426,7 @@ export default function App() {
               const p = missionProgress(m, dayState);
               return (
                 <div key={m.id} className={`mission${p.done ? ' done' : ''}`}>
-                  <span className="m-tick">{p.done ? '✓' : ''}</span>
+                  <span className="m-tick">{p.done ? <IconCheck size={16} /> : null}</span>
                   <span className="m-label">{m.label}</span>
                   <span className="m-count">{Math.min(p.have, p.target)}/{p.target}</span>
                   <span className="m-bar"><i style={{ width: `${Math.min(100, (p.have / p.target) * 100)}%` }} /></span>
@@ -1488,7 +1489,7 @@ export default function App() {
             ) : (
               <div className={`coin-flip ${coinFlip} stage`} aria-live="polite">
                 <span className="cf-disc" aria-hidden="true">
-                  {coinFlip === 'flipping' ? '?' : coinFlip === 'won' ? '★' : '✕'}
+                  {coinFlip === 'flipping' ? '?' : coinFlip === 'won' ? <IconStar size={30} /> : <IconClose size={28} />}
                 </span>
                 <span className="cf-words">
                   {coinFlip === 'flipping'
@@ -1513,7 +1514,7 @@ export default function App() {
           >
             <div className="howto-head">
               <h3 id="howto-title">THE BOOTH</h3>
-              <button className="howto-x" type="button" onClick={dismissHow} aria-label="close how to play" autoFocus>✕</button>
+              <button className="howto-x" type="button" onClick={dismissHow} aria-label="close how to play" autoFocus><IconClose size={18} /></button>
             </div>
             <div className="howto-steps">
               <div className="howto-step paint">
@@ -1570,7 +1571,7 @@ export class Boundary extends Component<{ children: ReactNode }, { error: Error 
           background: '#f7f4ec', color: '#141414', fontFamily: 'monospace', textAlign: 'center', padding: 24,
         }}>
           <div>
-            <div style={{ fontSize: 40 }}>🎪</div>
+            <div><IconWheel size={48} /></div>
             <h1 style={{ fontSize: 18, letterSpacing: '0.12em' }}>THE BOOTH JAMMED</h1>
             <p style={{ fontSize: 12, opacity: 0.7, maxWidth: 320 }}>
               Something broke on this device. Reload, your prizes and stats are saved.
