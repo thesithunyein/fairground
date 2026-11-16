@@ -2040,3 +2040,15 @@ body { background: var(--sky) fixed; }
   .spin-btn:not(:disabled)::before, .spin-btn:not(:disabled)::after { display: none; }
   .spin-btn:disabled { font-size: 13px; letter-spacing: 0; }
 }
+@media (max-width: 660px) {
+  /* results and wallet notes float just above the dock, like a toast */
+  .coach { display: none; }
+  .controls > .result-banner, .controls > .wallet-note, .controls > .day-nudge {
+    position: fixed; z-index: 42;
+    left: 10px; right: 10px;
+    bottom: calc(164px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 5px 0 rgba(16, 52, 140, 0.16), 0 12px 24px rgba(16, 52, 140, 0.25);
+  }
+  .controls > .day-nudge { display: none; }
+  .recent { display: none; }
+}
