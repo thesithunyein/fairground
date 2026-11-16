@@ -1,151 +1,108 @@
 # FAIRGROUND · Declared Math & RTP Verification
 
-> **Game:** FAIRGROUND, the honest carnival. Paint your prizes, the wheel stays fair.
-> **Entry:** Chain Jam Vol. 1 (jam.chain.wtf) · Contract: `contract/FairgroundWheel.sol`
-> **Declared theoretical RTP: 96.00%** (eligibility window 93–98%), held for **every legal paint** and for **every strategy**, by construction.
+> **Game:** FAIRGROUND, the honest carnival. Paint your prizes, ride a fair ladder.
+> **Runs on:** the Chain.wtf **graph engine**, as a title of 300 fair ladders: `src/title.ts`. There is no game contract of our own.
+> **RTP ≈ 96%**: the engine reports **96.00%** for every configuration; the floored prizes it actually pays return **95.9999% to 96.0000%**. Section 4 explains the gap, which never favours the player.
 
 ## 1. The round
 
-Three steps, two VRF words:
-
 ```
-1. open            onSessionStart   → WAITING_RANDOMNESS    word A: the segment
-2. word A          onRandomness     → WAITING_PLAYER_ACTION
-3. BANK or RIDE    onPlayerAction   → SETTLED               (bank)
-                                    → WAITING_RANDOMNESS    (ride)
-4. word B          onRandomness     → SETTLED               the ride coin
+open      encodePlainGameData(configuration, paintTail)   the engine requests word 1
+word 1    the ladder's ENTRY: the wheel draws SAFE, MID or RISKY            → waiting at the rung
+RIDE      actionData = abi.encode(uint256 0)                 the engine requests word k
+word k    the ride: WIN doubles the hold, LOSE pays 0 and settles            → waiting at the rung, or settled
+BANK      actionData = abi.encode(uint256 1)                 settles at once, no word needed
 ```
 
-- `N` segments, `N ∈ {8, 10, 12, 14, 16}` (even). A word is mapped to a segment with **rejection sampling**: `limit = floor(256/N)·N`; the first byte `b < limit` gives `segment = b % N`. This is **exactly uniform**, with no modulo bias (RANDOMNESS_DICE.md rules). If all 32 bytes were rejected (p < 2⁻³² per word, never observed), the fallback is `uint256(randomness) % N`, mirrored identically in client and contract.
-- **Word B does not exist when the player decides.** That is the whole point of the extra step: the ride coin must be unpredictable at decision time, or a player (or a script) could read it out of the session's first word and ride only when it wins.
+- The player can RIDE again and again. The engine refuses a ride whose win would bring the cash-out to the **100x cap**, and once no ride is left it settles the session at the cash-out by itself.
+- **Each ride's word does not exist when the player decides.** It is requested by the RIDE action itself, so the coin cannot be read out of an earlier word.
+- A session reserves only what its **next step** can win (the engine's `stepNet`), so a long ride ties up little liquidity at its start.
 
 ## 2. What the player paints
 
-Each segment gets a **tier**: `0 = SAFE`, `1 = MID`, `2 = RISKY`. Tiers only change **payouts**, never probabilities. A paint is **legal** iff:
+Each slice gets a tier: `SAFE`, `MID` or `RISKY`. A paint is **legal** iff, with `N ∈ {8, 10, 12, 14, 16}` slices:
 
-1. every tier ≤ 2
-2. `cRisky ≥ 1`, so there is something to win
-3. `cSafe + cMid ≥ 1`, so there is a cushion
-4. `2·cRisky ≤ N`, so risky covers at most half the wheel
+1. `cRisky ≥ 1`, so there is something to win
+2. `cSafe + cMid ≥ 1`, so there is a cushion
+3. `2·cRisky ≤ N`, so risky covers at most half the wheel
 
-## 3. Pricing · one equation, RTP exactly 96%
+The payout only depends on the **composition** `(N, cSafe, cMid, cRisky)`, not on where the slices sit. There are **300** legal compositions, and each one is a bet configuration of the title, in the order `scripts/ladder-math.mjs` walks them (N, then cRisky, then cMid). The slice layout rides in the game data's tail: the engine ignores it, and the booth uses it only to draw the wheel.
 
-Let `(cS, cM, cR)` be the tier counts. By definition of RTP:
+## 3. Pricing · one equation
 
-```
-RTP·N = SAFE·cS + MID·cM + RISKY·cR
-```
-
-Three unknowns, one equation → fix an **anchor** and derive a **scale**:
+Let `(cS, cM, cR)` be the tier counts. RTP 96% means:
 
 ```
-SAFE = 0.2              (anchor, always pays a fifth of the stake back)
-MID   = 2λ               (derived)
-RISKY = 6λ               (derived)
-
-λ = (RTP·N − 0.2·cS) / (2·cM + 6·cR)     (floored to WAD)
+0.96·N = SAFE·cS + MID·cM + RISKY·cR
 ```
 
-Because there is exactly **one** linear equation and exactly **one** free variable λ, **every legal paint returns exactly 96% before floor rounding.** The floor remainder (≤ a few thousandths of a cent per spin) goes to the house, so realized RTP is **at least 93% and at most 96.00%**, always inside the declared window, and the verifier shows it at ≈ 95.99–96.00%.
-
-**Ordering guarantee.** On the legal space, `λ ≥ 0.24`:
-
-- the minimum of `(0.96·N − 0.2·cS)/(2·cM + 6·cR)` over every legal paint is **0.24**, reached at `N = 8, cS = 0, cM = 4, cR = 4` → `7.68/32 = 0.24`.
-- rule 4 (`2·cR ≤ N`) is what holds this floor up: it excludes paints such as `N = 8, cM = 3, cR = 5`, where risky would cover 62.5% of the wheel and λ would fall to `7.68/36 ≈ 0.213`.
-
-Therefore on every legal paint: `SAFE = 0.2 < MID = 2λ ≥ 0.48 < RISKY = 6λ ≥ 1.44`. Safe is always the cushion, risky always pays at least 1.44×. No edge cases exist.
-
-**Maximum multiplier.** The heaviest legal paint is `N=16, cR=1, cM=0, cS=15` → `λ = (15.36 − 3)/6 = 2.06` → `RISKY = 12.36×`. Global base-tier max ≈ **12.36×**.
-
-## 4. The ride · an exactly fair coin, so the edge never moves
-
-After word A the player holds a real amount — the landed segment's multiplier `m`. They may:
+Three unknowns, one equation, so fix an **anchor** and derive a **scale**:
 
 ```
-BANK  → payout = wager · m
-RIDE  → payout = 2 · wager · m   with probability 1/2
-                 0                otherwise
+SAFE  = 0.2               (anchor: a fifth of the stake back)
+MID   = 2λ
+RISKY = 6λ
+λ = (0.96·N − 0.2·cS) / (2·cM + 6·cR)
 ```
 
-`E[ride] = ½·2m + ½·0 = m = E[bank]`. The optional step is therefore a **pure variance choice with zero house edge**:
+Each prize is then **floored to a whole prize unit**, a millionth of the wager (`prizeDenominator = 1,000,000`).
 
-- `E[payout] = wager · 0.96` for **every legal paint and every strategy**, so the declared `expectedPayout` is honest whatever the player does. The game carries no "under optimal play" caveat.
-- The ride is priced in nothing, because it costs nothing in expectation. A player who always banks and a player who always rides both return exactly 96%.
+**Ordering.** Over every legal paint `λ ≥ 0.24` (at `N = 8, cS = 0, cM = 4, cR = 4`: `7.68 / 32`); rule 3 is what holds it up. So `SAFE = 0.2 < MID ≥ 0.48 < RISKY ≥ 1.44` on every paint.
 
-**Maximum round payout.** The ride doubles the heaviest tier, so the worst case is `2 × 12.36× = 24.72×`, and `probabilityWad` (the probability of that top payout) is `cRisky/N · ½`, at minimum `1/16 · ½ = 3.125%`.
+**Largest prize.** `N = 16, cS = 15, cM = 0, cR = 1` gives `λ = 2.06`, so `RISKY = 12.36x`.
 
-## 5. Vault risk
+## 4. The ladder, and why the engine says 96.00% while the prizes return ≈96%
 
-The facet triggers the tiered jackpot-reserve path when `maxPayout/wager > 100` **and** win probability < 0.1%. FAIRGROUND's worst case: round multiplier 24.72× (< 100) and top-payout probability ≥ 3.125% (≥ 0.1%). **Both thresholds are comfortably unmet → the simple VaR path**, with no σ floor required.
+Each configuration is one **fair ladder** node:
 
-Because the host commits risk *before* the player chooses, every declared quantity is the **worst case over the player's choices** (i.e. the player rides). A riding player is the expensive one: they double the worst tier and halve its probability.
-
-`quoteRiskParams` declared vs actual:
-
-| Quantity | Declared | Actual (onRandomness) |
+| Field | Value | Why |
 |---|---|---|
-| `maxPayout` | `RIDE_FACTOR · wager · RISKY / WAD` | the doubled risky payout, the maximum over both choices |
-| `probabilityWad` | `cRisky·WAD / (2N)` | exactly the chance the top payout lands (heaviest tier **and** a winning coin) |
-| `expectedPayout` | `wager · 0.96` | exact expectation of the payout distribution, for every strategy |
-| `bodyVarianceScaled` | `X²·cMid·(2N−cMid)·1e18 / N²` | variance of the payout with the top tier removed (below) |
+| `basePrize` | 960,000 (0.96x) | a fair ladder's value is exactly its base prize, so the house edge lives here |
+| `ratioDenominator` | 960,000 | equal to `basePrize`, so an entry ratio of `p` cashes out at exactly `p` prize units |
+| `entry` | SAFE, MID, RISKY with weights `cS, cM, cR` and ratios = the floored prizes | the wheel; MID is left out when `cM = 0`, because the engine allows no zero weight |
+| `rungs[0]` | one option, RIDE: WIN ratio 2 (`1,920,000`), LOSE ratio 0, weight 1 each | an exact double-or-nothing |
+| `capPrize` | 100,000,000 (100x) | no cash-out reaches 100x |
 
-`quoteCaps` and `onSessionStart` reserve against the same `maxPayout`, and every payout — quote, bank, ride win, ride loss — is computed through the single `_payoutFor` expression, so the reserve and the paid amount agree to the wei (see CONTRACT_CONSTRAINTS.md's "reserve and payout must agree to the wei").
+**The engine's derive checks every step of a ladder for fairness:** a step's mean ratio may not be above `ratioDenominator`, and may fall below it by at most 1/10,000. That covers the ride (exactly fair) and the **entry** too. So the house edge cannot sit in the wheel's prizes. It sits in `basePrize` = 0.96x, and the wheel's entry is a fair step around it.
 
-**Body variance (the fourth parameter).** `ICasinoGameV2` defines `bodyVarianceScaled` as the
-variance of this bet's payout **with the top tier removed**, per bet, in wei²·1e18. It is added
-to the top-tier binary variance for every bet, heavy-tail or not, and a game whose top tier is the
-sole winning outcome returns `0`. The excluded tier is exactly the one whose probability is
-reported as `probabilityWad`, which is what keeps the on-chain binary term and this body term
-from double counting.
+That is also why the two RTP figures differ:
 
-The top tier is RISKY here, so the removal leaves SAFE and MID:
+- **The engine reports 96.00% for every configuration.** It derives a fair ladder's value as `basePrize`, by definition, and does not look at how far below fair the entry falls inside the 1/10,000 tolerance.
+- **The floored prizes return 95.9999% to 96.0000%.** Flooring each prize to a whole prize unit leaves the entry's mean ratio a hair under fair, at most 0.0001 percentage points of RTP. `scripts/check-title.ts` asserts the gap for all 300 configurations: always ≥ 0, never more than 0.0001 points.
+- **Paid amounts can sit one base unit under the floored prize.** The engine holds the banked multiplier in 1e18 fixed point as `floor(1e18 × prize / 960,000)`. Because 0.96 has a factor of 3, that is exact only for prizes divisible by 3, so a cash-out pays `floor(wager × prize / 1e6)` **or one base unit less**, never more. Example: a 1.000000 chUSD bet that lands the 0.2x SAFE slice pays 0.199999. The check tests every tier of every configuration at every ride depth over eight wagers: 31,052 exact, 18,412 one unit under, none over.
 
-- SAFE pays at most `2 × 0.2 = 0.4×` even when doubled, so it is never a winning outcome;
-- MID is a second winning outcome exactly when its **doubled** payout beats the stake, i.e.
-  `2·(2λ) > 1`, i.e. `λ > 0.25`.
+Every difference is a rounding remainder that stays with the house, a millionth of the wager or less. The booth says **RTP ≈96%** and shows the paint's exact floored figure in **Why this stays fair**.
 
-Taken under the worst-case policy (the player rides), the surviving payout is the doubled mid
-multiplier behind two independent, unbiased flips — `B ~ Bernoulli(p)` that MID is landed with
-`p = cMid/N`, and `K ~ Bernoulli(½)` that the fair ride wins, with `E[K] = 1` and
-`E[K²] = ½·RIDE_FACTOR² = 2`. Writing `X` for the mid payout:
+## 5. The rides · the fairness of each one is enforced on-chain
+
+At the rung the player holds the cash-out `wager × m`. They may:
 
 ```
-E[BKX] = Xp          E[(BKX)²] = 2X²p
-Var    = 2X²p − X²p² = X²·p·(2 − p) = cMid·(2N − cMid)·X² / N²
+BANK → payout = wager · m
+RIDE → hold becomes 2m   with probability 1/2   (and the player may ride again)
+       payout 0          with probability 1/2
 ```
 
-Dropping the ride's coin (`K ≡ 1`) recovers the bank-only form `p(1−p)·X²`, so this is the same
-measure with the ride folded in. `2λ > 0.5` holds on the safe-heavy paints — **259 of the 300
-legal composition classes** — so the contract computes this per paint rather than hardcoding zero.
-`scripts/verify-rtp.mjs` recomputes it from an independent brute-force enumeration of all `2N`
-(segment, coin) outcomes for every legal class and asserts the contract's arithmetic agrees.
+`E[ride] = ½·2m + ½·0 = m = E[bank]`, so every ride is a **pure variance choice**: a player who always banks and a player who rides to the cap both return the same ≈96%. This is not a claim we ask anyone to trust:
 
-## 6. Cosmetic prize roll (payout-neutral)
+- **The chain enforces it.** The graph engine's derive refuses a title with any ladder step that pays above fair or more than 1/10,000 below it, and takes the **best play at every decision** when it computes RTP. A ride with an edge either way could not have deployed.
+- **The cap is enforced too.** The engine refuses a ride whose win would reach 100x, and derive refuses a ladder whose entry could reach the cap. Rides allowed after a landing: 8 on the 0.2x SAFE slice, and 3 to 6 on a RISKY slice depending on the paint (3 on the 12.36x slice: `12.36 → 24.72 → 49.44 → 98.88`).
+- **The approval ceiling is met.** The title's highest RTP is 96.00% ≤ 98%, so it is whitelisted the moment it deploys.
 
-The byte **after** the accepted segment byte (or the segment byte itself if it was last) is the **prize roll**: `toyId = b % 6`; rarity by value: `b < 196` common (76.6%), `b < 246` rare (19.5%), else legendary (3.9%). The payout path reads **only** the segment byte; `scripts/verify-rtp.mjs` proves payout invariance over the prize byte's full range. The ride never touches the prize roll, so a ridden round still drops exactly one toy.
+## 6. What the booth shows, and what it decides
 
-## 7. Forfeit quote
+Nothing. The frontend never decides an outcome or a payout: the engine settles every session from the compiled graph and the VRF words.
 
-`quoteForfeitPayout` may only quote value already determined by revealed state, or it becomes an
-adverse-selection exploit against the vault (CONTRACT_CONSTRAINTS.md). The host can only forfeit a
-session in `WAITING_PLAYER_ACTION` — exactly the step where the segment is known and BANK is
-available — so the contract quotes **that bankable amount**, and returns `0` while a ride is in
-flight, where the value genuinely depends on unresolved randomness.
+- **The wheel.** The booth replays every word with the SDK's `walkLadder`, the engine's own walk. The entry label says which tier the engine drew. Which slice of that tier the pointer stops on is chosen from the same word under its own domain, `keccak256(word ‖ "fairground:slice") mod (slices of that tier)`. Every slice of the tier pays the same, so this is purely cosmetic, and it is deterministic, so anyone can recompute it.
+- **The hold** is shown as the floored prize doubled once per ride won (a SAFE landing reads 0.20×), and the amount as exactly what the engine pays, to the base unit (a 1 chUSD bet on that slice holds 0.199999 chUSD). The booth never rounds a payout up.
+- **Rides left** come from the cap: the booth counts how many doublings the engine's own cap rule (`ladderOptionPassesCap`) still allows from the current hold.
+- **Prize drops** are cosmetic too: `keccak256(word ‖ "fairground:prize")` gives the toy (`mod 6`) and its rarity (low byte `< 196` common, `< 246` rare, else legendary: 76.6 / 19.5 / 3.9%). Nothing on the payout path reads them.
 
-## 8. Verification
+## 7. Verification
 
-`npm run verify:rtp` proves, over **every legal paint**:
-
-1. pricing identity `RTP·N = Σ multᵢ` holds up to floor remainder (remainder < N·WAD/1000)
-2. ordering `0.2 < MID < RISKY` and `RISKY ≥ 1.44`
-3. multiplier cap ≤ 16× on one tier (contract constant), real base max ≈ 12.36×
-4. heavy-tail thresholds unmet on the **round** worst case too (24.72× < 100×, top payout ≥ 3.125% ≥ 0.1%)
-5. floor-truncated RTP ∈ [93%, 98%] for every paint
-6. Monte-Carlo (≥ 200k spins over randomized legal paints), for a **banking** and a **riding** player: both empirical RTPs ∈ window
-7. prize-byte invariance: payout identical for all 256 prize rolls
-8. rejection-sampling uniformity: χ²-style bucket check within tolerance
-9. `bodyVarianceScaled` agrees with the closed form `cMid·(2N−cMid)·X²·1e18 / N²` on every legal class, is positive exactly when the doubled mid beats the stake, and is zero when the risky tier is the only winning outcome
-10. **the ride is exactly fair**: enumerating all `2N` (segment, coin) outcomes for every class, banking and riding have the same expectation, and it is the declared 96%
-
-`scripts/e2e-round.mjs` drives the real local host (chain + Verify Network VRF) through a banked
-round, a ridden round in **both** coin outcomes, the declared quotes and the forfeit quote.
+| Command | What it proves |
+|---|---|
+| `npm run check:math` | `scripts/ladder-math.mjs 1000000 100`: the reference math for all 300 compositions, without the SDK. Floored RTP 95.9999–96.0000%, every configuration ≤ 98% and < 100%, no entry at the cap, cap ≥ 2x the base |
+| `npm run check:title` | `scripts/check-title.ts`: compiles `src/title.ts` with the SDK's `compileGraphGame`, the compiler the platform runs, and holds every configuration to `ladder-math.mjs`: the same compositions and floored prizes to the prize unit; engine RTP ≤ 98% and within 0.0001 points above the floored RTP; every cash-out at every ride depth equal to the floored prize or one base unit under, never over; the rides the cap allows per tier equal to `ladder-math.mjs`'s; quoted expected payout 0.96x; 3,000 random `walkLadder` sessions settling as the floored prizes say |
+| `node scripts/e2e-ladder.ts [n]` | with `npm run simulator` running: opens `n` real sessions on the deployed title, RIDEs and BANKs through `submitAction`, waits for the local VRF node, and checks each settlement against `walkLadder`, the floored prizes and the player's token balance |
+| `npm run verify:missions` | the daily objectives and ladder are pure, cosmetic logic |

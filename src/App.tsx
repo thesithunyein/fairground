@@ -1,33 +1,33 @@
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
-import { computeMaxWager } from './chain-sdk/guest';
+import type { Hex } from 'viem';
+import { SessionPhase, type HostSnapshot } from '@chain-protocol/casino-sdk/guest';
 import {
+  BANK_ACTION,
+  RIDE_ACTION,
   defaultPaint,
-  encodeGameData,
-  outcomeFromRandomness,
-  priceWheel,
-  formatMultiplier,
-  isLegalPaint,
-  decodeGameData,
-  demoRandomness,
-  demoSeed,
-  presetPaint,
-  presetOf,
-  tierCounts,
-  PAINT_PRESETS,
-  formatWad,
+  demoWord,
+  decodePaint,
+  encodePaint,
+  flooredRtpWad,
   formatPercent,
-  RTP_WAD,
-  SAFE_ANCHOR_WAD,
-  MID_WEIGHT,
-  RISKY_WEIGHT,
-  ridePayout,
-  rideCoinWon,
-  MAX_ROUND_MULTIPLIER_X,
-  ACTION_RIDE,
+  formatPrize,
+  formatUnitsPlain,
+  gameDataFor,
+  isLegalPaint,
+  paintFromGameData,
+  presetOf,
+  presetPaint,
+  replayRound,
+  ridesFromPrize,
+  tierCounts,
+  wheelPrizes,
+  PAINT_PRESETS,
   type Paint,
   type PaintPresetId,
+  type RoundView,
   type Tier,
 } from './lib/game';
+import { CAP_PRIZE, PRIZE_DENOMINATOR, SAFE_PRIZE } from './title';
 import {
   LADDER,
   allMissionsDone,
@@ -94,15 +94,13 @@ function buzz(pattern: number | number[]) {
   try { nav.vibrate?.(pattern); } catch { /* no haptics on this device */ }
 }
 
-// Mirrors the SessionPhase enum in ICasinoGameV2.sol.
-const PHASE_WAITING_RANDOMNESS = 1;
-const PHASE_WAITING_PLAYER_ACTION = 2;
-const PHASE_SETTLED = 3;
-const PHASE_FORFEITED = 4;
-const PHASE_CANCELLED = 5;
-const isTerminal = (p: number | undefined) => p === PHASE_SETTLED || p === PHASE_FORFEITED || p === PHASE_CANCELLED;
+const PHASE_WAITING_RANDOMNESS = SessionPhase.WAITING_RANDOMNESS;
+const PHASE_WAITING_PLAYER_ACTION = SessionPhase.WAITING_PLAYER_ACTION;
+const PHASE_SETTLED = SessionPhase.SETTLED;
+const PHASE_FORFEITED = SessionPhase.FORFEITED;
+const PHASE_CANCELLED = SessionPhase.CANCELLED;
 
-/** Tier names for the readouts, indexed by the contract's tier values. */
+/** Tier names for the readouts, indexed by tier (0 safe, 1 mid, 2 risky). */
 const TIER_WORD = ['SAFE', 'MID', 'RISKY'] as const;
 
 // ── session stats & milestones (client-only cosmetics) ─────────────────
@@ -139,12 +137,12 @@ function saveStats(s: Stats) {
 
 // shareable wheels: pack the paint into the ?wheel= URL param
 function paintToUrlParam(p: Paint): string {
-  return encodeGameData(p).slice(2); // strip 0x
+  return encodePaint(p).slice(2); // strip 0x
 }
 
 function paintFromUrlParam(param: string | null): Paint | null {
   if (!param || !/^[0-9a-fA-F]{18}$/.test(param)) return null;
-  try { return decodeGameData((`0x${param}`) as never); } catch { return null; }
+  return decodePaint(`0x${param}`);
 }
 
 type Round = {
@@ -154,6 +152,8 @@ type Round = {
   paint: Paint;
   /** true until openSession resolves with a sessionKey */
   pending: boolean;
+  /** true when the round was picked back up from the host after a reload */
+  resumed?: boolean;
 };
 
 type Result = {
@@ -162,28 +162,12 @@ type Result = {
   payout: bigint;
   won: boolean;
   prize: { id: number; rarity: ToyRarity };
-  /** true when the player pushed their luck on the fair coin */
-  ridden: boolean;
-  /** true when that coin came up heads (the win doubled) */
-  rideWon: boolean;
-  multiplierWad: bigint;
-};
-
-/** What the first spin has banked, while the player still has to choose. */
-type Decision = {
-  segment: number;
-  tier: Tier;
-  banked: bigint;
-  prize: { id: number; rarity: ToyRarity };
-  multiplierWad: bigint;
-};
-
-/** The parts of a landed spin that resolving a round actually needs. */
-type Settlement = {
-  tier: Tier;
-  payout: bigint;
-  multiplierWad: bigint;
-  prize: { id: number; rarity: ToyRarity };
+  /** fair rides won before the round ended */
+  ridesWon: number;
+  /** true when the last ride came up tails and took the hold */
+  rideLost: boolean;
+  /** what was paid, as a multiple of the wager in prize units (0 on a loss) */
+  multiplierUnits: bigint;
 };
 
 /** Present while the ride coin is in the air, or once it has landed. */
@@ -201,10 +185,38 @@ function friendlyBetError(e: unknown, symbol: string): string {
   const raw = e instanceof Error ? e.message : String(e);
   const m = raw.match(/Max bet right now: ([\d.]+)/);
   if (m) return `Max bet right now: ${m[1]} ${symbol}`;
-  if (/BetRiskExceedsLimit|ReservedProfit|reserved profit/i.test(raw)) return "The house can't cover a bet that size right now, go smaller.";
+  if (/WagerAboveRiskBudget|WagerAboveBreakEvenRule|NetWinAboveSingleWinCap|ReservedProfit|reserved profit/i.test(raw)) return "The house can't cover a bet that size right now, go smaller.";
   if (/user rejected|UserRejected|denied/i.test(raw)) return 'Cancelled.';
   if (raw.length > 90) return 'Bet failed, try again.';
   return raw;
+}
+
+type SessionRow = HostSnapshot['sessions']['items'][number];
+
+/** The session's fulfilled VRF words in request order: the wheel, then one per ride. */
+function sessionWords(row: SessionRow): Hex[] {
+  const words = (row.raw?.randomnessRequests ?? [])
+    .filter(req => req.fulfilled && req.randomness)
+    .map(req => req.randomness as Hex);
+  if (words.length === 0 && row.raw?.randomness) return [row.raw.randomness as Hex];
+  return words;
+}
+
+/** SDK 0.7.0 renamed the balance to smartVaultBalance; older hosts still send smartWalletBalance. */
+function smartVaultBalance(snapshot: HostSnapshot | null): string | undefined {
+  const balances = snapshot?.balances as { smartVaultBalance?: string; smartWalletBalance?: string } | undefined;
+  return balances?.smartVaultBalance ?? balances?.smartWalletBalance;
+}
+
+/**
+ * An amount the player is paid or holds, to the base unit when it is not a round cent:
+ * a 1 chUSD bet on the 0.2x slice pays 0.199999, and the booth says so rather than
+ * rounding up or truncating to 0.19 (docs/MATH.md §4).
+ */
+function formatExact(value: bigint, decimals: number): string {
+  const base = 10n ** BigInt(decimals);
+  const frac = (value % base).toString().padStart(decimals, '0').replace(/0+$/, '');
+  return `${value / base}.${frac.length <= 2 ? frac.padEnd(2, '0') : frac}`;
 }
 
 function formatUnits(value: bigint, decimals: number): string {
@@ -256,7 +268,7 @@ export default function App() {
       if (fromUrl) return fromUrl;
       const saved = localStorage.getItem('fg_paint_v1');
       if (saved) {
-        const p = decodeGameData(saved as never);
+        const p = decodePaint(saved as Hex);
         if (p) return p;
       }
     } catch { /* ignore */ }
@@ -295,25 +307,31 @@ export default function App() {
   const [confetti, setConfetti] = useState(0); // increments to fire the legendary burst
   const [copied, setCopied] = useState(false);
   const [nearMiss, setNearMiss] = useState(false); // landed one slice off risky
-  // The push-your-luck beat: the first spin has landed, the player may bank it or
-  // stake it on one provably fair coin. See contract/FairgroundWheel.sol.
-  const [decision, setDecision] = useState<Decision | null>(null);
+  // The push-your-luck beat: the wheel has landed (or a ride has been won), and the
+  // player may BANK the hold or RIDE it on one more fair coin. See src/title.ts.
+  const [decision, setDecision] = useState<RoundView | null>(null);
   const [choice, setChoice] = useState<'bank' | 'ride' | null>(null);
   const [coinFlip, setCoinFlip] = useState<CoinFlip>('none');
   const [rideBusy, setRideBusy] = useState(false);
-  // the sessionKey whose spin has already been animated, so a later re-render
-  // (the ride's coin arriving) cannot spin the wheel a second time
-  const animatedRoundRef = useRef<string | null>(null);
   const [gapToRisky, setGapToRisky] = useState<number | null>(null); // rim distance to the nearest risky slice
   const [err, setErr] = useState('');
   const roundRef = useRef<Round | null>(null);
   const placingRef = useRef(false); // guards double-tap double-bet
   roundRef.current = round;
-  // Mirrors the pending choice for the demo stall watchdog, which must stand down
-  // once the spin has landed: from there the round is open because the PLAYER is
-  // deciding, and a round a human is thinking about is not a stall.
-  const decisionRef = useRef<Decision | null>(null);
-  decisionRef.current = decision;
+  // The round as the engine sees it: the session's fulfilled VRF words in order
+  // (words[0] drew the wheel, every later word resolved one ride) and whether the
+  // session has settled. The host effect fills these from the snapshot; demo play
+  // fills them from the browser's CSPRNG. advance() turns them into the screen.
+  const wordsRef = useRef<Hex[]>([]);
+  const settledOnChainRef = useRef(false);
+  // How many words have been shown so far: 0 means the wheel has not spun yet.
+  const shownRef = useRef(0);
+  // An animation (the wheel, or a coin landing) is playing; advance() waits for it.
+  const animatingRef = useRef(false);
+  // The current round has been resolved and paid out on screen.
+  const resolvedRef = useRef(false);
+  const choiceRef = useRef<'bank' | 'ride' | null>(null);
+  choiceRef.current = choice;
   // Session keys this page has already settled. The host's projection can lag a
   // settlement by a beat, so without this the resume effect below would re-adopt
   // a round the player has already been paid for — rebuilding it as an in-flight
@@ -321,20 +339,18 @@ export default function App() {
   const settledRef = useRef<Set<string>>(new Set());
   // True once the wheel has actually landed for the current round. The demo
   // stall watchdog keys off THIS, not a wall clock: a round where the player is
-  // deliberating, or waiting on the ride coin, is not a stall. Without it the
-  // watchdog fires mid-ride and wipes the round out from under its own result.
+  // deliberating, or waiting on the ride coin, is not a stall.
   const landedRef = useRef(false);
   // True once a VRF word has been seen for the current host round, so the
   // host watchdog below can tell "node is slow" from "we already have it".
   const wordRef = useRef(false);
   const hostStallTimer = useRef(0);
-  // Late-bound settle. `spinDemo` is memoised, and on the very first render the
-  // bridge is still 'pending' so its captured `settle` closes over demo=false:
-  // the opening spin after a reload would then skip the demo bank update and
-  // reuse a stale collection. Routing every resolve through this ref means the
-  // landing always runs against the newest render's state.
-  const settleRef = useRef<(segment: number, s: Settlement, ride?: { won: boolean } | null) => void>(() => {});
+  // Late-bound: timers and the wheel's land callback call through these refs, so
+  // they always run against the newest render's state.
+  const settleRef = useRef<(r: Round, view: RoundView) => void>(() => {});
   settleRef.current = settle;
+  const advanceRef = useRef<() => void>(() => {});
+  advanceRef.current = advance;
 
   const decimals = demo ? 6 : snapshot?.token?.decimals ?? 6;
   const symbol = demo ? 'chUSD' : snapshot?.token?.symbol ?? 'chUSD';
@@ -346,127 +362,186 @@ export default function App() {
     walletIssue === 'disconnected' ? 'Connect your wallet in the host menu to play for real.' :
     walletIssue === 'session-key-mismatch' ? 'Session expired, reconnect in the host menu.' :
     walletIssue ? 'Wallet not ready, open the host menu.' : null;
-  const rawBalance = demo ? balance : BigInt(snapshot?.balances?.smartVaultBalance ?? '0');
+  const rawBalance = demo ? balance : BigInt(smartVaultBalance(snapshot) ?? '0');
 
-  // Max wager from live platform limits. The game reserves the WORST CASE of the
-  // round, which is the ride doubling the heaviest legal tier: ≈ 24.72×.
-  const maxWager = useMemo(() => {
-    if (demo) return balance;
-    const cap = computeMaxWager(snapshot, { maxMultiplierX: MAX_ROUND_MULTIPLIER_X });
-    if (cap === undefined) return 1000n * 10n ** BigInt(decimals);
-    return cap;
-  }, [demo, snapshot, balance, decimals]);
-
-  const prices = priceWheel(paint);
+  const prices = wheelPrizes(paint);
   const legal = isLegalPaint(paint);
   const counts = tierCounts(paint);
-  const riskyCount = Number(counts[2]);
-  const midCount = Number(counts[1]);
-  const safeCount = Number(counts[0]);
+  const riskyCount = counts[2];
+  const midCount = counts[1];
+  const safeCount = counts[0];
   const activePreset = presetOf(paint);
+
+  // Max wager: asked of the host for this exact configuration, re-asked when the
+  // paint changes and on an interval. `unknown`, `no-limit` and a failed call all
+  // fall back to the booth's own limit, never to unlimited.
+  const [hostMaxWager, setHostMaxWager] = useState<bigint | undefined>(undefined);
+  useEffect(() => {
+    if (demo || !hostApi || !legal) return;
+    let live = true;
+    const gameData = gameDataFor(paint);
+    const ask = () => {
+      hostApi.getMaxWager({ gameData })
+        .then(answer => { if (live) setHostMaxWager(answer.kind === 'limit' ? BigInt(answer.maxWager) : undefined); })
+        .catch(() => { if (live) setHostMaxWager(undefined); });
+    };
+    ask();
+    const timer = window.setInterval(ask, 15_000);
+    return () => { live = false; window.clearInterval(timer); };
+  }, [demo, hostApi, paint, legal]);
+  const ownLimit = 1000n * 10n ** BigInt(decimals);
+  const maxWager = demo ? balance : hostMaxWager ?? ownLimit;
+
   // The proof strip is derived, never hardcoded: λ is the one free variable of
-  // the pricing equation, and the return shown is whatever the resulting prices
-  // actually produce — the same integers the contract pays out.
-  const lambdaWad = prices.mid / MID_WEIGHT;
-  const rtpWad = (
-    prices.safe * BigInt(safeCount) + prices.mid * BigInt(midCount) + prices.risky * BigInt(riskyCount)
-  ) / BigInt(paint.segmentCount);
+  // the pricing equation, and the return shown is whatever the floored prizes
+  // actually produce — the same integers the engine pays out.
+  const lambdaUnits =
+    ((96n * BigInt(paint.segmentCount) * PRIZE_DENOMINATOR) / 100n - SAFE_PRIZE * BigInt(safeCount)) /
+    BigInt(2 * midCount + 6 * riskyCount || 1);
+  const rtpWad = flooredRtpWad(paint);
+  // the most a single round can reach: risky, ridden as far as the cap allows
+  const riskyRides = legal ? ridesFromPrize(paint, prices.risky) : 0;
   // a risky win gets the heavy landing shake; the wheel reads the last result
   const heavyShake = !!result && result.won && result.tier === 2;
 
   // LCD: idle → RTP + max mult; spinning → status; holding → the choice; done → result
   useEffect(() => {
     if (round) {
-      if (decision) setLcd(`BANK ${formatMultiplier(decision.multiplierWad)} - RIDE IT?`);
+      if (decision) setLcd(`BANK ${formatPrize(decision.holdUnits)} - RIDE IT?`);
       else if (choice === 'ride') setLcd('COIN IN THE AIR...');
-      else setLcd(round.sessionId ? 'SPINNING... GOOD LUCK' : 'SENDING BET...');
+      else if (choice === 'bank') setLcd('BANKING...');
+      else setLcd(round.sessionId || demo ? 'SPINNING... GOOD LUCK' : 'SENDING BET...');
     } else if (result) {
-      if (result.ridden && !result.won) setLcd('RIDE LOST - HOLD NEXT TIME?');
-      else if (result.ridden) setLcd(`DOUBLED TO ${formatUnits(result.payout, decimals)} ${symbol}`);
-      else setLcd(result.won ? `WIN ${formatUnits(result.payout, decimals)} ${symbol}` : 'NO WIN - REPAINT?');
-    } else setLcd(`RTP 96.00  MAX ${formatMultiplier(prices.risky)}`);
-  }, [round, result, prices.risky, decimals, symbol, decision, choice]);
+      if (result.rideLost) setLcd('RIDE LOST - BANK NEXT TIME?');
+      else if (result.ridesWon > 0) setLcd(`RODE ${result.ridesWon}X TO ${formatExact(result.payout, decimals)} ${symbol}`);
+      else setLcd(result.won ? `WIN ${formatExact(result.payout, decimals)} ${symbol}` : 'NO WIN - REPAINT?');
+    } else setLcd(`RTP ~96  MAX ${formatPrize(prices.risky)}`);
+  }, [round, result, prices.risky, decimals, symbol, decision, choice, demo]);
 
-  // Host-driven round. The word COUNT is the step signal we trust: the first
-  // fulfilled VRF word is always the spin, and a second one exists only after a
-  // ride. The host's projected phase is unreliable here — production swallows
-  // mid-round waiting states — so nothing below depends on it beyond terminality.
+  /** Forget the round's progress: a new round, or one the host cancelled. */
+  function resetRoundTracking() {
+    wordsRef.current = [];
+    settledOnChainRef.current = false;
+    shownRef.current = 0;
+    animatingRef.current = false;
+    resolvedRef.current = false;
+    landedRef.current = false;
+    wordRef.current = false;
+    pendingResolveRef.current = null;
+  }
+
+  /**
+   * Moves the screen one beat towards the session's state, as the words say it is.
+   * Every beat is replayed with the SDK's walkLadder from scratch, so the booth can
+   * never drift from what the engine settled: first the wheel spins to the drawn
+   * tier, then each ride's coin lands, then the round either waits for BANK/RIDE or
+   * pays out. Called on every snapshot, after every animation, and by demo play.
+   */
+  function advance() {
+    const r = roundRef.current;
+    if (!r || animatingRef.current || resolvedRef.current) return;
+    const words = wordsRef.current;
+    if (words.length === 0) return; // still waiting on the wheel's VRF word
+    const settledOnChain = settledOnChainRef.current;
+
+    let view: RoundView;
+    try {
+      // a session that settled while its walk still waits at the rung was banked
+      view = replayRound(r.paint, r.wager, words, settledOnChain);
+    } catch {
+      setErr('This round could not be replayed here. Your balance on the host is correct.');
+      return;
+    }
+
+    if (shownRef.current === 0) {
+      // the wheel: spin to a slice of the tier the engine drew
+      const entry = words.length === 1 ? view : replayRound(r.paint, r.wager, words.slice(0, 1));
+      // a resumed round skips replaying coins the player already watched
+      shownRef.current = r.resumed ? words.length : 1;
+      animatingRef.current = true;
+      setPendingSegment(entry.segment);
+      setSpinNonce(n => n + 1);
+      pendingResolveRef.current = () => {
+        animatingRef.current = false;
+        landedRef.current = true;
+        advanceRef.current();
+      };
+      return;
+    }
+
+    if (words.length > shownRef.current) {
+      // a ride's coin has landed
+      const through = replayRound(r.paint, r.wager, words.slice(0, shownRef.current + 1));
+      shownRef.current += 1;
+      animatingRef.current = true;
+      setDecision(null);
+      setChoice(null);
+      setRideBusy(false);
+      setCoinFlip(through.lastRide === 'won' ? 'won' : 'lost');
+      window.setTimeout(() => {
+        animatingRef.current = false;
+        setCoinFlip('none');
+        advanceRef.current();
+      }, 1100);
+      return;
+    }
+
+    if (view.status === 'settled') {
+      // On the host, pay out only once the session has settled there too.
+      if (!demo && !settledOnChain) return;
+      resolvedRef.current = true;
+      settleRef.current(r, view);
+      if (!demo && r.sessionId) {
+        // The host holds the win back from its balance display until the result
+        // has been shown, and it tracks the round by the bare `sessionId`.
+        void hostApi?.revealOutcome({ sessionId: r.sessionId }).catch(() => {});
+      }
+      return;
+    }
+
+    if (choiceRef.current === 'ride') { setCoinFlip('flipping'); return; } // waiting on the coin word
+    if (choiceRef.current === 'bank') return; // waiting on the host to settle the cash-out
+    setDecision(view);
+  }
+
+  // Host-driven round. The words are the step signal we trust: the first fulfilled
+  // VRF word drew the wheel, and each later one resolved a ride. The host's
+  // projected phase is unreliable mid-round, so it is read only for terminality.
   useEffect(() => {
     if (demo || !snapshot || !round || !round.sessionKey) return;
     const row = snapshot.sessions.items.find(s => s.sessionKey === round.sessionKey);
     if (!row) return;
-    const sessionKey = round.sessionKey;
 
     if (row.phase === PHASE_CANCELLED || row.phase === PHASE_FORFEITED) {
       // A cancel or forfeit moves balance back to the player, and the host
       // keeps that credit withheld until we reveal. Harmless no-op if the
       // host has nothing held for this session.
       void hostApi?.revealOutcome({ sessionId: row.sessionId }).catch(() => {});
+      settledRef.current.add(row.sessionKey);
+      resetRoundTracking();
       setRound(null);
       setPendingSegment(null);
       setDecision(null);
       setChoice(null);
+      setCoinFlip('none');
       setRideBusy(false);
-      setLcd('ROUND CANCELLED');
+      setLcd(row.phase === PHASE_FORFEITED ? 'ROUND FORFEITED' : 'ROUND CANCELLED');
       return;
     }
 
-    const words = (row.raw?.randomnessRequests ?? []).filter(req => req.fulfilled && req.randomness);
-    const spinWord = words[0]?.randomness ?? row.raw?.randomness;
-    if (!spinWord) return; // no spin word yet: still waiting on the real VRF node
-    wordRef.current = true;
-    window.clearTimeout(hostStallTimer.current);
-
-    const outcome = outcomeFromRandomness(round.wager, round.paint, spinWord);
-    const landed = animatedRoundRef.current === sessionKey;
-
-    if (isTerminal(row.phase)) {
-      const coinWord = words[1]?.randomness;
-      const ride = coinWord ? { won: rideCoinWon(coinWord) } : null;
-      const resolve = () => {
-        if (ride) setCoinFlip(ride.won ? 'won' : 'lost');
-        settleRef.current(outcome.segment, outcome, ride);
-        // The host holds the win back from its balance display until the
-        // result has been shown, and it tracks the round by the bare
-        // `sessionId`. `sessionKey` is "{chainId}:{sessionId}", so passing it
-        // here matches no tracked round and the balance never credits while
-        // the game is open. The row is the authoritative source for both.
-        void hostApi?.revealOutcome({ sessionId: row.sessionId }).catch(() => {});
-      };
-      // by settlement the wheel has already landed (the player could only bank
-      // or ride after seeing it), so this must not spin the wheel a second time
-      if (landed) resolve();
-      else {
-        animatedRoundRef.current = sessionKey;
-        setPendingSegment(outcome.segment);
-        setSpinNonce(n => n + 1);
-        pendingResolveRef.current = resolve;
-      }
-      return;
+    const words = sessionWords(row);
+    if (words.length > 0) {
+      wordRef.current = true;
+      window.clearTimeout(hostStallTimer.current);
     }
+    wordsRef.current = words;
+    settledOnChainRef.current = row.phase === PHASE_SETTLED;
+    if (round.sessionId !== row.sessionId) setRound({ ...round, sessionId: row.sessionId });
+    advanceRef.current();
+  }, [snapshot, round, demo, hostApi]);
 
-    // the spin has landed and the player still has to choose
-    if (!landed && !decision && !choice) {
-      animatedRoundRef.current = sessionKey;
-      setPendingSegment(outcome.segment);
-      setSpinNonce(n => n + 1);
-      pendingResolveRef.current = () => {
-        landedRef.current = true;
-        setDecision({
-          segment: outcome.segment,
-          tier: outcome.tier,
-          banked: outcome.payout,
-          prize: outcome.prize,
-          multiplierWad: outcome.multiplierWad,
-        });
-        setCoinFlip('none');
-      };
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snapshot, round, demo, decision, choice]);
-
-  // session resume: a reload mid-VRF-wait recovers the in-flight round from
-  // the host's snapshot, and the wheel animates to its segment when VRF lands.
+  // session resume: a reload mid-round recovers the session from the host's
+  // snapshot and comes back in the same step, not at the start.
   useEffect(() => {
     if (demo || !snapshot || round) return;
     const row = snapshot.sessions.items.find(
@@ -474,43 +549,48 @@ export default function App() {
         && (s.phase === PHASE_WAITING_RANDOMNESS || s.phase === PHASE_WAITING_PLAYER_ACTION),
     );
     if (!row || settledRef.current.has(row.sessionKey)) return;
-    const resumedPaint = row.raw?.gameData ? decodeGameData(row.raw.gameData) : null;
-    const wager = BigInt(row.stake ?? row.wager ?? '0');
+    const resumedPaint = row.raw?.gameData ? paintFromGameData(row.raw.gameData) : null;
+    const wager = BigInt(row.wager ?? row.stake ?? '0');
     if (!resumedPaint || wager <= 0n) return;
-    // A reload mid-round has to come back in the same step, not at the start: if
-    // the ride's word has already been asked for, the player has already chosen
-    // and must not be asked to choose again.
-    const words = (row.raw?.randomnessRequests ?? []).filter(req => req.fulfilled && req.randomness);
-    setChoice(words.length >= 2 ? 'ride' : null);
+    // If a ride or a bank has been sent and not yet answered, the player has
+    // already chosen and must not be asked again.
+    const words = sessionWords(row);
+    const actions = row.raw?.actions;
+    const ridesSent = actions?.filter(a => a.actionData.toLowerCase() === RIDE_ACTION).length;
+    const bankSent = actions?.some(a => a.actionData.toLowerCase() === BANK_ACTION);
+    const pending: 'bank' | 'ride' | null = bankSent
+      ? 'bank'
+      : ridesSent !== undefined
+        ? (words.length > 0 && ridesSent > words.length - 1 ? 'ride' : null)
+        : (words.length > 0 && row.phase === PHASE_WAITING_RANDOMNESS ? 'ride' : null);
+    resetRoundTracking();
+    setChoice(pending);
     setDecision(null);
     setCoinFlip('none');
+    setResult(null);
     setPaint(resumedPaint);
-    setRound({ wager, paint: resumedPaint, sessionKey: row.sessionKey, sessionId: row.sessionId, pending: false });
+    setRound({ wager, paint: resumedPaint, sessionKey: row.sessionKey, sessionId: row.sessionId, pending: false, resumed: true });
     setLcd('RESUMED - WAITING FOR VRF...');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapshot, round, demo]);
 
-  /**
-   * Resolve a round. `s` describes the landed spin; `ride` is null when the
-   * player banked it and `{ won }` when they staked it on the fair coin.
-   */
-  function settle(segment: number, s: Settlement, ride: { won: boolean } | null = null) {
-    const r = roundRef.current;
-    if (!r) return;
+  /** Pays a settled round out on screen. `view` is the engine's settlement, replayed. */
+  function settle(r: Round, view: RoundView) {
     if (r.sessionKey) settledRef.current.add(r.sessionKey);
     window.clearTimeout(hostStallTimer.current);
-    const payout = ride === null ? s.payout : ridePayout(s.payout, ride.won);
-    const multiplierWad = ride === null ? s.multiplierWad : ride.won ? 2n * s.multiplierWad : 0n;
+    const payout = view.payout ?? 0n;
     const won = payout > 0n;
+    const paidUnits = won ? view.holdUnits : 0n;
+    const segment = view.segment;
+    const s = { tier: view.tier, prize: view.prize };
     setResult({
       segment,
-      tier: s.tier,
+      tier: view.tier,
       payout,
       won,
-      prize: s.prize,
-      ridden: ride !== null,
-      rideWon: ride?.won ?? false,
-      multiplierWad,
+      prize: view.prize,
+      ridesWon: view.ridesWon,
+      rideLost: view.lastRide === 'lost',
+      multiplierUnits: paidUnits,
     });
     setRound(null);
     setPendingSegment(null);
@@ -521,13 +601,12 @@ export default function App() {
     setDecision(null);
     setChoice(null);
     setRideBusy(false);
-    if (ride === null) setCoinFlip('none');
-    else window.setTimeout(() => setCoinFlip('none'), 1200);
+    setCoinFlip('none');
     // the biggest slice on the wheel gets the heaviest landing
     if (won && s.tier === 2) sfx.landHeavy(); else sfx.land();
     // a risky win lands harder: short taps on a plain land, a small pattern on a win
     buzz(won && s.tier === 2 ? [18, 40, 90] : 12);
-    window.setTimeout(() => sfx.sting(s.tier, won, multiplierWad >= 4n), 140);
+    window.setTimeout(() => sfx.sting(s.tier, won, paidUnits >= 4n * PRIZE_DENOMINATOR), 140);
 
     // Near-miss drama, measured rather than assumed: how many slices around the
     // rim the pointer stopped from the nearest risky wedge. One slice off is a
@@ -560,7 +639,7 @@ export default function App() {
     // daily objectives (cosmetic only, see lib/missions.ts)
     recordMission('spins');
     setHistory(prev => [
-      { tier: s.tier, won, x: multiplierWad > 0n ? formatMultiplier(multiplierWad) : '×0' },
+      { tier: s.tier, won, x: paidUnits > 0n ? formatPrize(paidUnits) : '×0' },
       ...prev,
     ].slice(0, 8));
     if (won) recordMission('wins');
@@ -570,7 +649,7 @@ export default function App() {
     // a bold paint is one with risky covering at least 40% of the wheel, so
     // the objective asks the player to actually shape the paytable
     const landedCounts = tierCounts(r.paint);
-    if (landedCounts[2] * 5n >= BigInt(r.paint.segmentCount) * 2n) recordMission('boldSpins');
+    if (landedCounts[2] * 5 >= r.paint.segmentCount * 2) recordMission('boldSpins');
 
     // session stats, streaks, milestones (cosmetic, client-only)
     const winAmount = formatUnits(payout, decimals);
@@ -625,30 +704,6 @@ export default function App() {
 
   const pendingResolveRef = useRef<(() => void) | null>(null);
 
-  // The round is passed in rather than read back from the ref: this runs on a
-  // timer, and if React has not committed the setRound yet the ref is still
-  // null, which used to leave the booth on SPINNING… with SPIN disabled forever.
-  const spinDemo = useCallback((r: Round) => {
-    const seed = demoSeed();
-    const rnd = demoRandomness(seed);
-    const outcome = outcomeFromRandomness(r.wager, r.paint, rnd);
-    setPendingSegment(outcome.segment);
-    setSpinNonce(n => n + 1);
-    // landing reveals the banked amount and offers the ride, exactly as the host does
-    pendingResolveRef.current = () => {
-      landedRef.current = true;
-      setDecision({
-        segment: outcome.segment,
-        tier: outcome.tier,
-        banked: outcome.payout,
-        prize: outcome.prize,
-        multiplierWad: outcome.multiplierWad,
-      });
-      setChoice(null);
-      setCoinFlip('none');
-    };
-  }, []);
-
   const onWheelLand = useCallback(() => {
     const resolve = pendingResolveRef.current;
     pendingResolveRef.current = null;
@@ -656,13 +711,14 @@ export default function App() {
   }, []);
 
   /**
-   * The push-your-luck beat. BANK takes the landed amount. RIDE stakes it on a
-   * provably fair coin: heads doubles it, tails loses it.
+   * The push-your-luck beat, at every rung. BANK cashes out the hold. RIDE stakes
+   * it on a provably fair coin: heads doubles it, tails loses it, and the player
+   * may ride again until a win would reach the 100x cap.
    *
-   * The coin is a SECOND VRF word that does not exist when the player taps, so
+   * Each coin is a NEW VRF word that does not exist when the player taps, so
    * nobody — not the player, not a script reading the session — can know the
-   * outcome before choosing. And because the bet is exactly fair, the round
-   * returns 96% either way: the choice changes the variance, never the edge.
+   * outcome before choosing. The engine refuses any ride that is not a fair bet,
+   * so the round returns the same ~96% however often the player rides.
    */
   async function chooseAction(action: 'bank' | 'ride') {
     const r = roundRef.current;
@@ -670,36 +726,32 @@ export default function App() {
     if (!r || !d || choice) return;
     sfx.click();
     setChoice(action);
+    choiceRef.current = action;
     setDecision(null);
+    if (action === 'ride') setCoinFlip('flipping');
 
-    const settled = { tier: d.tier, payout: d.banked, multiplierWad: d.multiplierWad, prize: d.prize };
-
-    if (action === 'bank') {
-      // the landed amount is already the result — nothing is left unresolved
-      settleRef.current(d.segment, settled, null);
-      return;
-    }
-
-    setCoinFlip('flipping');
-    if (demo || !hostApi || !r.sessionId) {
-      // demo draws its own coin with the contract's exact rule
-      const won = rideCoinWon(demoRandomness(demoSeed()));
+    if (demo || !hostApi) {
+      // demo play feeds the same walk the engine runs with its own CSPRNG words
       window.setTimeout(() => {
-        setCoinFlip(won ? 'won' : 'lost');
-        settleRef.current(d.segment, settled, { won });
-      }, 900);
+        if (roundRef.current !== r) return;
+        if (action === 'ride') wordsRef.current = [...wordsRef.current, demoWord()];
+        else settledOnChainRef.current = true; // banked: the walk cashes out
+        advanceRef.current();
+      }, action === 'ride' ? 700 : 0);
       return;
     }
 
-    // The host settles once the coin arrives; the effect above resolves the
-    // round and paints the coin face.
+    // The host answers through the snapshot: a ride's coin word arrives as a new
+    // fulfilled request, a bank as the session settling. advance() takes it from there.
     setRideBusy(true);
     try {
-      await hostApi.submitAction({ sessionId: r.sessionId, actionData: `0x0${ACTION_RIDE}` });
+      if (!r.sessionId) throw new Error('The session is still opening, try again in a moment.');
+      await hostApi.submitAction({ sessionId: r.sessionId, actionData: action === 'ride' ? RIDE_ACTION : BANK_ACTION });
     } catch (e) {
-      // nothing was staked — put the choice back rather than stranding the round
+      // nothing was sent: put the choice back rather than stranding the round
       setRideBusy(false);
       setChoice(null);
+      choiceRef.current = null;
       setCoinFlip('none');
       setDecision(d);
       setErr(friendlyBetError(e, symbol));
@@ -720,7 +772,7 @@ export default function App() {
       // the player is betting now: get the instructions out of the way
       if (howOpen) dismissHow();
 
-      const gameData = encodeGameData(paint);
+      const gameData = gameDataFor(paint);
 
       const rt: Round = { wager, paint, pending: true };
       setRound(rt);
@@ -730,23 +782,26 @@ export default function App() {
       setChoice(null);
       setCoinFlip('none');
       setRideBusy(false);
-      animatedRoundRef.current = null; // a new round earns a fresh spin animation
-      landedRef.current = false;
-      wordRef.current = false;
+      resetRoundTracking(); // a new round earns a fresh spin animation
       window.clearTimeout(hostStallTimer.current);
       // hand the round to the land callback straight away: the timer below can
       // otherwise fire before React has committed the state
       roundRef.current = rt;
 
       if (demo || !hostApi) {
-        // let React paint the disabled button first
-        window.setTimeout(() => spinDemo(rt), 60);
+        // let React paint the disabled button first, then draw the wheel's word
+        window.setTimeout(() => {
+          if (roundRef.current !== rt) return;
+          wordsRef.current = [demoWord()];
+          advanceRef.current();
+        }, 60);
         // A demo spin resolves on its own animation frame, so nothing should
         // ever leave the round open. If it does (a dropped frame, a tab
         // backgrounded mid-spin), free the booth rather than wedge SPIN.
         window.setTimeout(() => {
           // only a spin that never LANDS is a stall — see landedRef
           if (roundRef.current !== rt || landedRef.current) return;
+          resetRoundTracking();
           setRound(null);
           setPendingSegment(null);
           setDecision(null);
@@ -758,14 +813,18 @@ export default function App() {
       try {
         const { sessionKey } = await hostApi.openSession({ wager: wager.toString(), gameData });
         if (roundRef.current === rt) {
-          setRound({ ...rt, sessionKey, pending: false });
+          // sessionKey is "{chainId}:{sessionId}"; the snapshot row confirms the id
+          const opened: Round = { ...rt, sessionKey, sessionId: sessionKey.split(':').pop(), pending: false };
+          roundRef.current = opened;
+          setRound(opened);
           setLcd('WAITING FOR VRF...');
           // A round whose word never arrives must not wedge the booth either.
           // Freeing the local round is safe: the session is still live on the
           // host, so the resume path picks it straight back up if it lands.
           window.clearTimeout(hostStallTimer.current);
           hostStallTimer.current = window.setTimeout(() => {
-            if (roundRef.current !== rt || wordRef.current) return;
+            if (roundRef.current?.sessionKey !== sessionKey || wordRef.current) return;
+            resetRoundTracking();
             setRound(null);
             setPendingSegment(null);
             setDecision(null);
@@ -797,7 +856,7 @@ export default function App() {
       // legal means at least one risky slice, at least one cushion, and never
       // more than half the wheel risky. Say so instead of eating the tap.
       const counts = tierCounts(paint);
-      refusePaint(counts[2] * 2n >= BigInt(paint.segmentCount)
+      refusePaint(counts[2] * 2 >= paint.segmentCount
         ? 'Risky can be at most half the wheel. Paint a risky slice back to Mid or Safe first.'
         : 'The wheel needs at least one Risky slice and one Safe or Mid slice.');
       return;
@@ -840,7 +899,7 @@ export default function App() {
   // persist the paint locally + mirror it into the URL as a shareable wheel
   useEffect(() => {
     try {
-      localStorage.setItem('fg_paint_v1', encodeGameData(paint));
+      localStorage.setItem('fg_paint_v1', encodePaint(paint));
       const u = new URL(window.location.href);
       u.searchParams.set('wheel', paintToUrlParam(paint));
       window.history.replaceState(null, '', u);
@@ -927,8 +986,8 @@ export default function App() {
   const wagerPreview = (() => {
     const w = parseUnits(betInput, decimals);
     if (w <= 0n) return null;
-    const riskyWin = (w * prices.risky) / 10n ** 18n; // prices are WAD-scaled
-    return `${formatUnits(w, decimals)} → up to ${formatUnits(riskyWin, decimals)} ${symbol} on risky`;
+    const riskyWin = (w * prices.risky) / PRIZE_DENOMINATOR; // prizes are in prize units
+    return `${formatUnits(w, decimals)} → ${formatUnits(riskyWin, decimals)} ${symbol} on risky, more if you ride`;
   })();
 
   const liveryUnlocked = unlockedLiveries(collection);
@@ -1036,7 +1095,7 @@ export default function App() {
               >
                 <span className="dot" />
                 {t === 0 ? 'Safe' : t === 1 ? 'Mid' : 'Risky'}
-                <span className="mult">{formatMultiplier(t === 0 ? prices.safe : t === 1 ? prices.mid : prices.risky)}</span>
+                <span className="mult">{formatPrize(t === 0 ? prices.safe : t === 1 ? prices.mid : prices.risky)}</span>
               </button>
             ))}
           </div>
@@ -1064,9 +1123,9 @@ export default function App() {
               risky slice pays less. This is the whole game in one line. */}
           <div className="paint-readout">
             <span><b>{riskyCount}</b> of {paint.segmentCount} risky</span>
-            <span>risky pays <b>{formatMultiplier(prices.risky)}</b></span>
-            <span>mid <b>{formatMultiplier(prices.mid)}</b></span>
-            <span className="stamp">RTP {formatPercent(rtpWad)}%</span>
+            <span>risky pays <b>{formatPrize(prices.risky)}</b></span>
+            <span>mid <b>{formatPrize(prices.mid)}</b></span>
+            <span className="stamp" title={`floored prizes return ${formatPercent(rtpWad)}%; the engine reports 96.00%`}>RTP ≈96%</span>
           </div>
 
           {paintNote && (
@@ -1079,18 +1138,18 @@ export default function App() {
               <div className="pp-row">
                 <span className="pp-tag">λ</span>
                 <code>
-                  ({formatWad(RTP_WAD, 2)}·{paint.segmentCount}
-                  {' − '}{formatWad(SAFE_ANCHOR_WAD, 2)}·{safeCount})
-                  {' ÷ '}({MID_WEIGHT.toString()}·{midCount} + {RISKY_WEIGHT.toString()}·{riskyCount})
-                  {' = '}<b>{formatWad(lambdaWad, 3)}</b>
+                  (0.96·{paint.segmentCount}
+                  {' − '}0.20·{safeCount})
+                  {' ÷ '}(2·{midCount} + 6·{riskyCount})
+                  {' = '}<b>{formatUnitsPlain(lambdaUnits, 3)}</b>
                 </code>
               </div>
               <div className="pp-row">
                 <span className="pp-tag">RTP</span>
                 <code>
-                  ({formatWad(prices.safe, 2)}·{safeCount}
-                  {' + '}{formatWad(prices.mid, 2)}·{midCount}
-                  {' + '}{formatWad(prices.risky, 2)}·{riskyCount})
+                  ({formatUnitsPlain(prices.safe, 2)}·{safeCount}
+                  {' + '}{formatUnitsPlain(prices.mid, 2)}·{midCount}
+                  {' + '}{formatUnitsPlain(prices.risky, 2)}·{riskyCount})
                   {' ÷ '}{paint.segmentCount}
                   {' = '}<b className="pp-ok">{formatPercent(rtpWad)}%</b>
                 </code>
@@ -1102,22 +1161,30 @@ export default function App() {
                 less: the return stays fixed, so no paint is better than another.
               </li>
               <li>
-                Safe {safeCount} pays {formatMultiplier(prices.safe)} · Mid {midCount} pays{' '}
-                {formatMultiplier(prices.mid)} · Risky {riskyCount} pays {formatMultiplier(prices.risky)}
+                Safe {safeCount} pays {formatPrize(prices.safe)} · Mid {midCount} pays{' '}
+                {formatPrize(prices.mid)} · Risky {riskyCount} pays {formatPrize(prices.risky)}
               </li>
-              <li>Expected return is 96.00% on every legal paint, by construction, not on average.</li>
-              <li>One VRF word per spin, rejection-sampled, so every slice is exactly as likely as every other.</li>
               <li>
-                The ride is a <b>provably fair coin</b>: heads doubles your hold, tails loses it, and the
-                coin comes from a second VRF word that does not exist while you are choosing. Because a
-                fair bet has no edge, the round still returns 96.00% whether you bank or ride — the choice
-                stakes variance, never the odds.
+                Expected return is ≈96% on every legal paint. Prizes are floored to a millionth of
+                your stake, so this paint returns {formatPercent(rtpWad)}%; the chain&apos;s engine
+                reports 96.00% for every paint.
+              </li>
+              <li>
+                The chain draws the tier from one VRF word, weighted by how many slices you painted,
+                so every slice is exactly as likely as every other.
+              </li>
+              <li>
+                Every ride is a <b>provably fair coin</b>: heads doubles your hold, tails loses it, and
+                each coin is a fresh VRF word that does not exist while you are choosing. Ride again and
+                again until a win would reach the {(CAP_PRIZE / PRIZE_DENOMINATOR).toString()}× cap
+                (risky allows {riskyRides} rides here). The chain checks every ride is fair before the
+                game can take a bet, so banking and riding return the same ≈96%.
               </li>
               <li>
                 <a href="https://github.com/thesithunyein/fairground/blob/main/docs/MATH.md" target="_blank" rel="noreferrer">
-                  The declared maths and the verifier that proves it
+                  The declared maths and the check that proves it
                 </a>{' '}
-                · <code>npm run verify:rtp</code>
+                · <code>npm run check:title</code>
               </li>
             </ul>
           </details>
@@ -1137,9 +1204,9 @@ export default function App() {
             <div className={result?.won ? 'lcd-win' : 'lcd-main'}>
               {round
                 ? decision
-                  ? `◆ HOLDING ${formatUnits(decision.banked, decimals)}`
-                  : choice === 'ride' ? '◆ FAIR COIN' : '● SPINNING'
-                : result ? (result.won ? `▲ ${formatUnits(result.payout, decimals)} ${symbol}` : '▼ NO WIN') : '■ PLACE YOUR BET'}
+                  ? `◆ HOLDING ${formatExact(decision.cashOut, decimals)}`
+                  : choice === 'ride' ? '◆ FAIR COIN' : choice === 'bank' ? '◆ BANKING' : '● SPINNING'
+                : result ? (result.won ? `▲ ${formatExact(result.payout, decimals)} ${symbol}` : '▼ NO WIN') : '■ PLACE YOUR BET'}
             </div>
             <button className="icon-btn" style={{ boxShadow: 'none', background: '#2a2d2b', borderColor: '#2a2d2b', color: '#7dffb2' }} onClick={autoRepaint} title="random legal paint">🎲</button>
           </div>
@@ -1197,7 +1264,7 @@ export default function App() {
             onClick={placeBet}
           >
             {round
-              ? decision ? 'KEEP OR DOUBLE' : choice === 'ride' ? 'COIN IN THE AIR…' : (round.sessionId || demo ? 'SPINNING…' : 'SIGNING…')
+              ? decision ? 'KEEP OR DOUBLE' : choice === 'ride' ? 'COIN IN THE AIR…' : choice === 'bank' ? 'BANKING…' : (round.sessionId || demo ? 'SPINNING…' : 'SIGNING…')
               : walletReady ? 'SPIN' : walletIssue === 'disconnected' ? 'CONNECT WALLET' : 'WALLET NOT READY'}
           </button>
 
@@ -1211,12 +1278,12 @@ export default function App() {
 
           {result && !round && (
             <div className={`result-banner ${result.won ? 'win' : nearMiss ? 'lose near' : 'lose'}`}>
-              {result.ridden && !result.won
-                ? <span>Rode a {TIER_WORD[result.tier]} hold and the fair coin came up tails. No win — repaint and go again.</span>
-                : result.ridden
-                  ? <span>Rode it and won: <CountUpTo value={parseFloat(formatUnits(result.payout, decimals))} /> {symbol} doubled from a {TIER_WORD[result.tier]} slice.</span>
+              {result.rideLost
+                ? <span>Rode a {TIER_WORD[result.tier]} hold{result.ridesWon > 0 ? ` through ${result.ridesWon} win${result.ridesWon > 1 ? 's' : ''}` : ''} and the fair coin came up tails. No win — repaint and go again.</span>
+                : result.ridesWon > 0
+                  ? <span>Rode it {result.ridesWon}× and banked <CountUpTo value={parseFloat(formatExact(result.payout, decimals))} final={formatExact(result.payout, decimals)} /> {symbol} ({formatPrize(result.multiplierUnits)}) from a {TIER_WORD[result.tier]} slice.</span>
               : result.won
-                ? <span>WIN <CountUpTo value={parseFloat(formatUnits(result.payout, decimals))} /> {symbol} · {TIER_WORD[result.tier]} paid</span>
+                ? <span>WIN <CountUpTo value={parseFloat(formatExact(result.payout, decimals))} final={formatExact(result.payout, decimals)} /> {symbol} · {TIER_WORD[result.tier]} paid</span>
                 : <span>
                     {nearMiss
                       ? 'SO CLOSE · one slice off risky. '
@@ -1230,7 +1297,7 @@ export default function App() {
 
           {!firstLoopDone && !round && (
             <p className="coach" role="status">
-              <b>Paint a slice, then SPIN.</b> You set the prizes. The return stays 96%.
+              <b>Paint a slice, then SPIN.</b> You set the prizes. The return stays ≈96%.
             </p>
           )}
 
@@ -1279,7 +1346,7 @@ export default function App() {
 
           <p className="screen-lead">
             Every spin drops a carnival prize. Fill all six of a set and the booth unlocks
-            its livery. Collecting never touches the odds: RTP stays 96% every spin.
+            its livery. Collecting never touches the odds: RTP stays ≈96% every spin.
           </p>
 
           {album.sets.map(({ set, have, total, done }) => (
@@ -1328,7 +1395,7 @@ export default function App() {
                 ? `season sealed · ${formatStamp(collection.stamps.album)}`
                 : 'wheel colours change with every complete set'}
             </span>
-            <span className="stamp">96% RTP always</span>
+            <span className="stamp">≈96% RTP always</span>
           </div>
         </div>
       </section>
@@ -1389,8 +1456,8 @@ export default function App() {
       </main>
 
       <footer className="fair-note">
-        <span>You paint the prizes. The wheel stays exactly 96%.</span>
-        <span className="stamp">DECLARED RTP 96%</span>
+        <span>You paint the prizes. Bank or ride, the return stays ≈96%.</span>
+        <span className="stamp">RTP ≈96% · ENGINE 96.00%</span>
       </footer>
 
       {(decision || coinFlip !== 'none') && (
@@ -1398,9 +1465,16 @@ export default function App() {
           <div className="ride-sheet">
             {decision ? (
               <>
-                <p className="ride-kicker">{TIER_WORD[decision.tier]} · {formatMultiplier(decision.multiplierWad)}</p>
-                <h3 id="ride-title">You hold {formatUnits(decision.banked, decimals)} {symbol}</h3>
-                <p className="ride-sub">Keep it, or flip a fair coin for double. Same 96% either way.</p>
+                <p className="ride-kicker">
+                  {TIER_WORD[decision.tier]} · {formatPrize(decision.holdUnits)}
+                  {decision.ridesWon > 0 ? ` · ${decision.ridesWon} ride${decision.ridesWon > 1 ? 's' : ''} won` : ''}
+                </p>
+                <h3 id="ride-title">You hold {formatExact(decision.cashOut, decimals)} {symbol}</h3>
+                <p className="ride-sub">
+                  Keep it, or flip a fair coin for double. Same ≈96% either way.{' '}
+                  <b>{decision.ridesLeft} ride{decision.ridesLeft === 1 ? '' : 's'} left</b> before the{' '}
+                  {(CAP_PRIZE / PRIZE_DENOMINATOR).toString()}× cap.
+                </p>
                 <div className="rd-btns">
                   <button type="button" className="rd-bank" disabled={rideBusy} onClick={() => void chooseAction('bank')}>
                     KEEP IT
@@ -1418,7 +1492,7 @@ export default function App() {
                 <span className="cf-words">
                   {coinFlip === 'flipping'
                     ? 'Fair coin in the air…'
-                    : coinFlip === 'won' ? 'HEADS — doubled.' : 'TAILS — the hold is gone.'}
+                    : coinFlip === 'won' ? 'HEADS: doubled.' : 'TAILS: the hold is gone.'}
                 </span>
               </div>
             )}
@@ -1443,11 +1517,11 @@ export default function App() {
             <div className="howto-steps">
               <div className="howto-step paint">
                 <span className="howto-num">1</span>
-                <span><b>Paint.</b> Tap slices Safe, Mid or Risky. More risky pays less each — return stays 96%.</span>
+                <span><b>Paint.</b> Tap slices Safe, Mid or Risky. More risky pays less each — return stays ≈96%.</span>
               </div>
               <div className="howto-step spin">
                 <span className="howto-num">2</span>
-                <span><b>Spin.</b> Every slice is exactly as likely. Then keep the win, or flip a fair coin for double.</span>
+                <span><b>Spin.</b> Every slice is exactly as likely. Then keep the win, or flip a fair coin for double, again and again up to the 100× cap.</span>
               </div>
               <div className="howto-step collect">
                 <span className="howto-num">3</span>
@@ -1518,8 +1592,10 @@ export class Boundary extends Component<{ children: ReactNode }, { error: Error 
   }
 }
 
-function CountUpTo({ value }: { value: number }) {
+/** Counts up to `value`, then shows `final`, the exact amount, so the last frame never rounds up. */
+function CountUpTo({ value, final }: { value: number; final: string }) {
   const [shown, setShown] = useState(value);
+  const [done, setDone] = useState(false);
   useEffect(() => {
     let raf = 0;
     const t0 = performance.now();
@@ -1528,11 +1604,13 @@ function CountUpTo({ value }: { value: number }) {
       const t = Math.min(1, (now - t0) / DUR);
       setShown(value * (1 - Math.pow(1 - t, 3)));
       if (t < 1) raf = requestAnimationFrame(step);
+      else setDone(true);
     };
+    setDone(false);
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [value]);
-  return <>{shown.toFixed(2)}</>;
+  return <>{done ? final : shown.toFixed(2)}</>;
 }
 
 function ConfettiBurst() {

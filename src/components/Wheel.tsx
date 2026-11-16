@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { priceWheel, formatMultiplier, type Paint, type Tier } from '../lib/game';
+import { wheelPrizes, formatPrize, type Paint, type Tier } from '../lib/game';
 
 const TIER_COLORS: Record<Tier, { fill: string; text: string }> = {
   0: { fill: 'var(--green)', text: '#ffffff' },
@@ -75,7 +75,7 @@ export function Wheel({
   const [pointerKick, setPointerKick] = useState(0); // peg-flex while spinning
 
   const colors = wheelColors(livery);
-  const prices = priceWheel(paint);
+  const prices = wheelPrizes(paint);
   const multFor = (t: Tier) => (t === 0 ? prices.safe : t === 1 ? prices.mid : prices.risky);
   const N = paint.segmentCount;
 
@@ -211,7 +211,7 @@ export function Wheel({
                   transform={`rotate(${(i + 0.5) * segAngle} ${pos.x} ${pos.y})`}
                   style={{ pointerEvents: 'none' }}
                 >
-                  {formatMultiplier(multFor(t)).replace('×', '')}
+                  {formatPrize(multFor(t)).replace('×', '')}
                 </text>
               </g>
             );

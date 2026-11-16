@@ -2,15 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import {
   connectGameToHost,
   observeGameContentSize,
-  type GuestApiV1,
-  type HostApiV1,
-  type HostSnapshotV1,
-} from '../chain-sdk/guest';
+  type GuestApi,
+  type HostApi,
+  type HostSnapshot,
+} from '@chain-protocol/casino-sdk/guest';
 
 export type HostConnection = {
-  hostApi: HostApiV1 | null;
-  snapshot: HostSnapshotV1 | null;
-  /** 'pending' until the handshake resolves or times out → 'host' | 'demo' */
+  hostApi: HostApi | null;
+  snapshot: HostSnapshot | null;
+  /** 'pending' until the handshake resolves or times out â†’ 'host' | 'demo' */
   mode: 'pending' | 'host' | 'demo';
 };
 
@@ -22,17 +22,17 @@ const SNAPSHOT_TIMEOUT_MS = 4000;
 
 /**
  * Guest side of the casino bridge. If the handshake doesn't resolve quickly
- * (the game was opened directly — jam gallery, judges, anyone), the game
+ * (the game was opened directly â€” jam gallery, judges, anyone), the game
  * flips into standalone demo mode. Connecting late still upgrades to host
  * mode; demo state is discarded.
  */
 export function useCasinoHost(): HostConnection {
-  const [hostApi, setHostApi] = useState<HostApiV1 | null>(null);
-  const [snapshot, setSnapshot] = useState<HostSnapshotV1 | null>(null);
+  const [hostApi, setHostApi] = useState<HostApi | null>(null);
+  const [snapshot, setSnapshot] = useState<HostSnapshot | null>(null);
   const [mode, setMode] = useState<'pending' | 'host' | 'demo'>('pending');
   const modeRef = useRef(mode);
   modeRef.current = mode;
-  const hostApiRef = useRef<HostApiV1 | null>(null);
+  const hostApiRef = useRef<HostApi | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -49,12 +49,12 @@ export function useCasinoHost(): HostConnection {
     })();
     if (!embedded) setMode('demo');
 
-    const guestMethods: GuestApiV1 = {
+    const guestMethods: GuestApi = {
       async setState(nextSnapshot) {
         if (!mounted) return;
         gotState = true;
         setSnapshot(nextSnapshot);
-        // real host state arrived → (re)enter host mode even if we had
+        // real host state arrived â†’ (re)enter host mode even if we had
         // fallen back to demo while waiting for it
         if (hostApiRef.current) setMode('host');
       },
@@ -70,7 +70,7 @@ export function useCasinoHost(): HostConnection {
         setMode('host');
       })
       .catch(() => {
-        // Handshake failed — stay demo until timeout, then stay demo forever.
+        // Handshake failed â€” stay demo until timeout, then stay demo forever.
       });
 
     const timer = window.setTimeout(() => {
@@ -78,7 +78,7 @@ export function useCasinoHost(): HostConnection {
     }, HANDSHAKE_TIMEOUT_MS);
 
     const snapshotTimer = window.setTimeout(() => {
-      // handshake resolved but the host never pushed state — some embeds do
+      // handshake resolved but the host never pushed state â€” some embeds do
       // postMessage without a real host behind them. Play demo; a late
       // setState still flips us back to host mode.
       if (mounted && modeRef.current === 'host' && !gotState) setMode('demo');

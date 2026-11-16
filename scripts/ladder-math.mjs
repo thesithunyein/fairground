@@ -3,7 +3,7 @@
 // entry prizes in integer prize units (floored, as the engine requires), the
 // resulting RTP, and how many fair x2 RIDEs each tier allows under the cap.
 //
-// Usage: node scripts/ladder-math.mjs [prizeDenominator] [capMultiplier]
+// Usage: node scripts/ladder-math.mjs [prizeDenominator] [capMultiplier] [--json]
 const D = BigInt(process.argv[2] ?? 10000);      // prize units per 1x wager
 const CAP_X = Number(process.argv[3] ?? 100);     // ladder cap, in x wager
 const CAP = BigInt(CAP_X) * D;
@@ -32,6 +32,12 @@ for (const N of [8, 10, 12, 14, 16]) {
         entryHitsCap: risky >= CAP });
     }
   }
+}
+
+// --json: print every configuration for scripts/check-title.ts to compare against the engine.
+if (process.argv.includes('--json')) {
+  console.log(JSON.stringify(configs, (_, v) => (typeof v === 'bigint' ? v.toString() : v)));
+  process.exit(0);
 }
 
 const rtps = configs.map(c => c.rtp);

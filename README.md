@@ -6,12 +6,12 @@
 
 **Paint your prizes. The wheel stays fair.**
 
-A real-money on-chain casino game: the player paints the payout table of a provably uniform wheel. The contract recomputes every multiplier on-chain so the wheel returns exactly 96% however you paint.
+A real-money on-chain casino game: the player paints the payout table of a fair wheel, then rides the win up a fair double-or-nothing ladder. It runs on the Chain.wtf **graph engine**, which derives the RTP from the game's math on-chain and refuses any ride that is not a fair bet. RTP is about 96% however you paint, bank or ride.
 
 [![Live game](https://img.shields.io/badge/play-fairground.sithunyein.com-2f6bff?logo=safari&logoColor=white)](https://fairground.sithunyein.com)
-[![Declared RTP](https://img.shields.io/badge/RTP-96.00%25_verified-1d9e57)](docs/MATH.md)
-[![E2E on VRF](https://img.shields.io/badge/E2E-3%2F3_rounds_VRF_settled-1d9e57)](scripts/e2e-round.mjs)
-[![Bundle](https://img.shields.io/badge/bundle-62_KB_gzip-2f6bff)](#performance)
+[![RTP](https://img.shields.io/badge/RTP-%E2%89%8896%25_(engine_96.00%25)-1d9e57)](docs/MATH.md)
+[![E2E on VRF](https://img.shields.io/badge/E2E-72%2F72_sessions_VRF_settled-1d9e57)](scripts/e2e-ladder.ts)
+[![Bundle](https://img.shields.io/badge/bundle-89_KB_gzip-2f6bff)](#performance)
 [![License: MIT](https://img.shields.io/badge/license-MIT-141414)](LICENSE)
 [![Chain Jam Vol. 1](https://img.shields.io/badge/Chain_Jam-Vol._1_entry-e8442e)](https://jam.chain.wtf)
 
@@ -19,22 +19,24 @@ A real-money on-chain casino game: the player paints the payout table of a prova
 
 ## What it is
 
-Every casino wheel fixes the paytable and lets the house choose it. FAIRGROUND inverts that: the wheel is provably uniform, one VRF word per spin, rejection-sampled to an exactly even segment, and the player paints each slice safe, mid or risky before every spin. The Solidity contract derives the multipliers from the paint on-chain and pays out from them. The house cannot rig a paytable it does not set, and the player cannot buy odds: RTP is 96 percent for every legal paint, by construction.
+Every casino wheel fixes the paytable and lets the house choose it. FAIRGROUND inverts that: the player paints each slice safe, mid or risky before every spin, and the prices follow from one equation, so the more of the wheel you take risky, the less each risky slice pays. The house cannot rig a paytable it does not set, and the player cannot buy odds: RTP is about 96 percent for every legal paint.
 
-Then the wheel gives you a decision. Land a slice, and you can **bank** what it pays or **ride** it on a provably fair coin: heads doubles the win, tails loses it. The ride is an exact 1/2 bet with no house edge, so it changes the variance and never the odds — which means the one promise survives the choice: the round returns 96% whether you paint it gentle or wild, and whether you bank or ride.
+Then the wheel gives you a decision, and keeps giving it. Land a slice and you can **bank** what it pays or **ride** it on a provably fair coin: heads doubles the hold, tails loses it. Win, and you can ride again, up to the 100x cap. Every ride is an exact 1/2 bet with no house edge, so it changes the variance and never the odds: the round returns the same ≈96% whether you paint it gentle or wild, and whether you bank at once or ride to the cap.
 
-Real money mode runs inside chain.wtf through the official casino SDK bridge: the player's vault balance, the host's bet limits, on-chain settlement. The guest follows the host's `ui.theme` snapshot, so it renders the dark booth inside a dark host app and keeps the light carnival identity everywhere it is opened directly. The same build opened standalone runs a labeled free-play mode, which is what the jam gallery and judges see.
+The game is a **graph-engine title** (`src/title.ts`): 300 fair ladders, one per legal paint composition, played by the chain's shared engine contract. There is no Solidity of our own to audit. The chain derives every configuration's RTP from the graph when the title deploys, and it refuses a title whose rides are not fair.
+
+Real money mode runs inside chain.wtf through the official casino SDK bridge (`@chain-protocol/casino-sdk`): the player's vault balance, the host's maximum wager for the exact paint, on-chain settlement. The guest follows the host's `ui.theme` snapshot, so it renders the dark booth inside a dark host app and keeps the light carnival identity everywhere it is opened directly. The same build opened standalone runs a labeled free-play mode, which is what the jam gallery and judges see.
 
 ## How the math stays honest
 
 | Guarantee | Mechanism |
 |---|---|
-| Exactly uniform wheel | Rejection sampling: first VRF byte under floor(256/N)*N maps to byte mod N. No modulo bias. |
-| RTP exactly 96% for any paint | Slices price as SAFE = 0.2x, MID = 2L, RISKY = 6L with L = (0.96N - 0.2 cSafe) / (2 cMid + 6 cRisky). One linear equation per paint. |
-| Contract trusts nothing from the client | Multipliers are recomputed inside FairgroundWheel.sol from the 9-byte paint. The browser only mirrors the math for previews. |
-| Cosmetics cannot touch payouts | Prize drops derive from leftover VRF bytes and are proven payout-invariant by test. |
-| The ride cannot change the edge | Banking and riding have identical expectation (`E[ride] = ½·2m + ½·0 = m`), so `expectedPayout` is exact for **every strategy**, not just optimal play. |
-| Verified | 300 of 300 legal composition classes price to exactly 96 percent; both a banking and a riding Monte-Carlo land in window; the ride's fairness is enumerated over all 2N outcomes per class; and `scripts/e2e-round.mjs` settles a banked round, a ridden round in **both** coin outcomes, every declared quote and the forfeit quote on a live VRF node, exact to the wei. Full detail in [docs/MATH.md](docs/MATH.md). |
+| Every slice equally likely | The engine draws the tier from one VRF word, weighted by how many slices of it you painted. Which slice of that tier the pointer shows is cosmetic, derived from the same word. |
+| RTP ≈96% for any paint | Slices price as SAFE = 0.2x, MID = 2L, RISKY = 6L with L = (0.96N - 0.2 cSafe) / (2 cMid + 6 cRisky), floored to a millionth of the wager. The engine reports 96.00% for every configuration; the floored prizes return 95.9999% to 96.0000%, and a payout can sit one base unit under its floored prize, never over. [docs/MATH.md](docs/MATH.md) section 4 explains both. |
+| The chain trusts nothing from the client | The paint picks one of 300 bet configurations; the engine settles from the compiled graph and the VRF words. The slice layout rides in the game data's tail for display only. |
+| Every ride is fair, on-chain | The engine's derive refuses any ladder step that pays above fair or more than 1/10,000 below it, and refuses rides that would reach the 100x cap. Each ride's coin is a VRF word requested by the RIDE action itself. |
+| Cosmetics cannot touch payouts | Prize drops derive from the wheel's word under their own hash domain; nothing on the payout path reads them. |
+| Verified | `npm run check:title` compiles the title with the SDK's compiler and holds all 300 configurations to `scripts/ladder-math.mjs`: prizes, RTP, rides allowed and every cash-out. `scripts/e2e-ladder.ts` played 72 real sessions on the simulator's chain, banks and multi-ride wins and losses, each settling exactly as the SDK's `walkLadder` replay says. Full detail in [docs/MATH.md](docs/MATH.md). |
 
 ## How the booth is laid out
 
@@ -56,13 +58,13 @@ The layout is decided by two things: how wide the screen is, and how tall it is.
 
 Every one of those claims is measured, not assumed. `public/qa-viewports.html` loads the game in a same-origin iframe at ten viewports, from a 320px phone to a 1600px desktop, so the media queries genuinely re-evaluate, and reports per viewport: horizontal overflow, tap targets under 44px, the smallest rendered font, where SPIN and the nav land, how much scrolling the PLAY screen needs, and whether the first-run coach sits on the table without covering the wheel. Open it on any running copy of the site (it is served at `/qa-viewports.html`) and read `window.__QA__`.
 
-PLAY teaches the whole mechanic without a covering manual. Three **stake shapes** (Gentle, Standard, Wild) are legal by construction, so one tap gives a newcomer a sensible paint and shows the full risk range. A **price line** under the slices reads back the trade as you paint (`6 of 12 risky - risky pays 1.56x - RTP 96.00%`), which is the part of the design that is otherwise invisible: the more of the wheel you take risky, the less each risky slice pays, and the return never moves. A refused tap is never swallowed, it shakes the panel and says why. A one-line coach (`Paint a slice, then SPIN`) retires after the first spin; the `?` crib is optional. A collapsed **Why this stays fair** panel holds the λ equation, the current paint's counts, its multipliers and the command that proves the maths. After the wheel lands, KEEP IT / DOUBLE is the only decision.
+PLAY teaches the whole mechanic without a covering manual. Three **stake shapes** (Gentle, Standard, Wild) are legal by construction, so one tap gives a newcomer a sensible paint and shows the full risk range. A **price line** under the slices reads back the trade as you paint (`6 of 12 risky - risky pays 1.56x - RTP ≈96%`), which is the part of the design that is otherwise invisible: the more of the wheel you take risky, the less each risky slice pays, and the return never moves. A refused tap is never swallowed, it shakes the panel and says why. A one-line coach (`Paint a slice, then SPIN`) retires after the first spin; the `?` crib is optional. A collapsed **Why this stays fair** panel holds the λ equation, the current paint's counts, its multipliers, its exact floored RTP and the command that proves the maths. After the wheel lands, KEEP IT / DOUBLE is the only decision, and it comes back after every winning ride with the hold and the rides left before the cap.
 
 ## Retention: the album and the daily booth
 
 The spin is the core loop, not the whole game. Two systems sit on top of it, and both are strictly cosmetic.
 
-**The prize album.** Every spin also drops a carnival toy from leftover VRF bytes: six toys across common, rare and legendary. The eighteen prizes are grouped into three sets of six, one per rarity, framed as Season 1 with a completion counter. Completing a set unlocks a wheel livery, and the seven day ladder ends in a gilded wheel. Rarity odds are 76.6 / 19.5 / 3.9 percent, so a set is a goal rather than a formality.
+**The prize album.** Every spin also drops a carnival toy, derived from the wheel's VRF word under its own hash domain: six toys across common, rare and legendary. The eighteen prizes are grouped into three sets of six, one per rarity, framed as Season 1 with a completion counter. Completing a set unlocks a wheel livery, and the seven day ladder ends in a gilded wheel. Rarity odds are 76.6 / 19.5 / 3.9 percent, so a set is a goal rather than a formality.
 
 **The daily booth.** Three objectives rotate each day, chosen deterministically from a pool of eleven (spin volume, wins, risk appetite, a legendary drop, a completed set, sharing your wheel). The three never overlap: one per theme, so a day never asks for the same thing twice. Meeting all three banks the day and climbs a seven rung ladder of stamps, with consecutive days required and a missed day sending the run back to rung one.
 
@@ -74,87 +76,90 @@ Neither system can touch a multiplier, a payout or an outcome. `src/lib/missions
 flowchart LR
     subgraph P["Player browser"]
         UI["React UI<br/>paint + spin + shelf"]
-        M["game.ts<br/>mirror of contract math"]
+        M["title.ts + game.ts<br/>compiled graph, walkLadder replay"]
     end
     subgraph H["chain.wtf host"]
         B["SDK bridge<br/>session lifecycle"]
         F["CasinoGameFacet<br/>escrow + risk caps"]
     end
     subgraph C["On-chain"]
-        G["FairgroundWheel.sol<br/>ICasinoGameV2"]
+        G["Graph engine<br/>300 fair ladders"]
         V["Verify Network VRF"]
     end
-    UI -->|openSession, paint bytes| B
+    UI -->|openSession: configuration + paint tail| B
+    UI -->|submitAction: RIDE 0 / BANK 1| B
     B --> F --> G
     G -->|request randomness| V
     V -->|bytes32 word| G
-    G -->|payout + segment| F --> B --> UI
-    UI -.->|standalone: no host| D["Free-play mode<br/>labeled, seeded PRNG"]
+    G -->|state + payout| F --> B --> UI
+    UI -.->|standalone: no host| D["Free-play mode<br/>labeled, same walk, CSPRNG words"]
 ```
 
-The round is one optional decision on top of an instant shape: open session, wait for the spin word, then **bank or ride**, and settle. The ride asks the host for a *second* VRF word, which is what makes the choice real — the coin cannot be read out of a word that does not exist yet.
+The round is a ladder: open a session, wait for the wheel's word, then **bank or ride** as many times as the cap allows. Each RIDE asks for a new VRF word, which is what makes every choice real: the coin cannot be read out of a word that does not exist yet. The booth replays every word with the SDK's `walkLadder`, the engine's own walk, so what it shows is what the chain settled.
 
 ## Project structure
 
 ```text
 fairground/
-├── contract/
-│   └── FairgroundWheel.sol     ICasinoGameV2 game: paint validation, pricing, settlement
+├── deployment.ts               How chain.wtf deploys it: a graph title, src/title.ts
 ├── src/
-│   ├── chain-sdk/              Vendored SDK types, guest bridge, bet limit helper
+│   ├── title.ts                The graph-engine title: 300 fair ladders (shared by chain, UI, checks)
 │   ├── components/
 │   │   ├── Wheel.tsx           Paintable SVG wheel, spin physics, peg-flex pointer
 │   │   └── Prizes.tsx          Pixel prize sprites, boot wheel, brand mark
 │   ├── lib/
-│   │   ├── game.ts             Shared math, exact mirror of the contract
+│   │   ├── game.ts             Paint layout, game data, walkLadder replay, cosmetic draws
 │   │   ├── collection.ts       Prize shelf, sets, liveries (localStorage)
 │   │   ├── missions.ts         Daily objectives + seven day ladder (pure logic)
 │   │   ├── sound.ts            WebAudio synth kit, zero audio assets
-│   │   └── useCasinoHost.ts    Bridge hook: host mode, demo fallback, resume
-│   ├── App.tsx                 Booth UI, bet flow, stats, missions, album
+│   │   └── useCasinoHost.ts    SDK bridge hook: host mode, demo fallback
+│   ├── App.tsx                 Booth UI, bet flow, ride ladder, stats, missions, album
 │   ├── main.tsx                Entry + crash boundary
 │   └── styles/fairground.css   Design system
 ├── scripts/
-│   ├── verify-rtp.mjs          Exhaustive class sweep + Monte Carlo proof
-│   ├── verify-missions.mjs     37 rule checks: boards, banking, ladder, cosmetics
-│   └── e2e-round.mjs           Full bet-VRF-settle round vs the local simulator
+│   ├── ladder-math.mjs         Reference math for all 300 compositions, no SDK
+│   ├── check-title.ts          Compiles the title, holds it to ladder-math.mjs
+│   ├── e2e-ladder.ts           Real sessions on the simulator's chain vs walkLadder
+│   └── verify-missions.mjs     37 rule checks: boards, banking, ladder, cosmetics
 ├── public/
 │   ├── game.manifest.json      SDK manifest
 │   └── icon-180.png.svg        Brand mark
-├── docs/MATH.md                Declared math, full derivation and test report
+├── docs/MATH.md                Declared math, the RTP rounding, verification
 ├── index.html                  Jam widget, meta, fonts
 └── LICENSE                     MIT
 ```
 
 ## Security
 
-- **Fairness is auditable in minutes.** One VRF word for the spin, a second for the ride coin, one rejection-sampling loop, one linear pricing equation. The contract comments walk a reviewer through every step, including the settle-time reserved-profit rule (the classic instant-game trap) and the multi-step reservation that must survive the decision.
-- **No keys, no wallets, no signatures in the client.** The browser holds no secrets and never talks to a chain directly in host mode; the SDK bridge and the host's facet handle escrow, the action step and settlement. The ride reveals nothing early: the player's choice is committed before the coin word is requested.
-- **Every input is validated on-chain.** Segment count, tier values, paint legality and the 16x multiplier cap all revert in the contract; illegal states are unreachable, not just hidden in the UI.
-- **Light tail by design, worst case included.** The heaviest legal paint pays about 12.4x; the ride's ~24.7x worst case is still far inside the platform's 100x heavy-tail multiplier threshold, and the top payout lands with probability at least 3.125%, well above the 0.1% companion threshold. No sigma floor is needed.
-- **Cosmetics are non-financial.** Collection state lives in localStorage and cannot alter any payout, proven by test.
+- **No contract of our own.** The game is a graph title played by the chain's shared engine. The chain derives the RTP, the maximum payout and the risk quotes from the graph when the title deploys, and refuses math that breaks a rule, so there is no game Solidity to audit and no quote to get wrong.
+- **Every ride is fair by the chain's rule, not ours.** Derive refuses a ladder step that pays above fair or more than 1/10,000 below it, and the engine refuses any ride whose win would reach the 100x cap.
+- **No keys, no wallets, no signatures in the client.** The browser holds no secrets and never talks to a chain directly in host mode; the SDK bridge and the host's facet handle escrow, the actions and settlement. A ride reveals nothing early: the player's choice is committed before its coin word is requested.
+- **Inputs cannot move a payout.** The game data names one of 300 configurations; the paint tail is display only, and the booth only trusts a tail that matches the configuration played.
+- **Cosmetics are non-financial.** Collection state lives in localStorage, and prize drops come from their own hash domain; nothing on the payout path reads either.
 - **Crash containment.** A render-level error boundary keeps a broken session from white-screening; player state survives in storage.
 
 Report anything suspicious by opening a GitHub issue or reaching out on the Chain Jam Discord.
 
 ## Performance
 
-66 KB gzipped total, zero runtime image assets (the game is drawn entirely in SVG and CSS, audio is synthesized in the browser), self-hosted font subsets and no third-party requests of any kind. The game paints its first frame before most sites finish their font fetch. The only PNGs in the repo are the favicon, the social card and the catalog icon and cover declared in `game.manifest.json`, none of which block the first frame. Designed to load near-instantly on mobile data, which the jam checks.
+About 89 KB gzipped total (the graph engine's walk and compiler, which replay every session in the browser, are part of it), zero runtime image assets (the game is drawn entirely in SVG and CSS, audio is synthesized in the browser), self-hosted font subsets and no third-party requests of any kind. The game paints its first frame before most sites finish their font fetch. The only PNGs in the repo are the favicon, the social card and the catalog icon and cover declared in `game.manifest.json`, none of which block the first frame. Designed to load near-instantly on mobile data, which the jam checks.
 
 ## Development
 
 ```bash
-npm install
-npm run dev            # http://localhost:3120, standalone free-play mode
-npm run verify:rtp     # exhaustive RTP proof, all legal paints
+npm install             # Node 22.18+ (loads the TypeScript title directly)
+npm run dev             # http://localhost:3120, standalone free-play mode
+npm run check:math      # reference math, all 300 compositions
+npm run check:title     # compile the title with the SDK, hold it to the reference
 npm run verify:missions # daily objectives, banking and the seven day ladder
-npm run build          # production build to dist/
+npm run build           # production build to dist/
 
-# full on-chain loop: start the casino SDK simulator, then
-node scripts/e2e-round.mjs
+# full on-chain loop, with `npm run dev` running:
+npm run simulator       # chain dev casino: dev chain, VRF node, deploys src/title.ts
+node scripts/e2e-ladder.ts 20
 ```
 
-The contract hot-deploys into the SDK simulator: drop it in `simulator/contracts/`, the local node compiles, deploys, registers, and the bundled VRF node fulfills requests.
+`npm run simulator` deploys the title from `deployment.ts` on the real engine bytecode, prints `Play your game at …`, and redeploys whenever `src/title.ts` changes. To ship, connect the repository to the chain.wtf developer platform: it reads the same `deployment.ts`, compiles the title, derives it on-chain and builds the Vite frontend.
 
 ## License
 

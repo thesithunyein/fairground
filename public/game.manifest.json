@@ -1,12 +1,11 @@
 {
   "schemaVersion": 1,
   "gameId": "FairgroundWheel",
-  "apiVersion": 1,
   "defaultLocale": "en",
   "locales": {
     "en": {
       "name": "FAIRGROUND",
-      "description": "The honest carnival. Paint the payout tiers on a provably uniform wheel, spin on VRF, then bank your win or stake it on one provably fair coin. 96% RTP on every legal paint — and whether you bank or ride."
+      "description": "The honest carnival. Paint the payout tiers, spin a VRF wheel, then bank your win or ride a provably fair coin for double, again and again up to 100x. About 96% RTP whatever you paint, bank or ride, and the chain checks every ride is fair."
     }
   },
   "assets": {
