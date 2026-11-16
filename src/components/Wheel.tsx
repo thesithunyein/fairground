@@ -175,7 +175,7 @@ export function Wheel({
 
   const labelPos = (i: number): { x: number; y: number } => {
     const mid = ((i + 0.5) * segAngle - 90) * (Math.PI / 180);
-    const rr = R * 0.72;
+    const rr = R * (N >= 14 ? 0.76 : 0.7);
     return { x: cx + rr * Math.cos(mid), y: cy + rr * Math.sin(mid) };
   };
 
@@ -203,12 +203,15 @@ export function Wheel({
                   x={pos.x}
                   y={pos.y}
                   fill={colors[t].text}
-                  fontSize="15"
+                  fontSize={N <= 10 ? 19 : N <= 12 ? 16 : 13}
                   fontWeight="700"
                   fontFamily="var(--font-pixel)"
                   textAnchor="middle"
                   dominantBaseline="middle"
-                  transform={`rotate(${(i + 0.5) * segAngle} ${pos.x} ${pos.y})`}
+                  transform={`rotate(${(-rotation).toFixed(2)} ${pos.x.toFixed(2)} ${pos.y.toFixed(2)})`}
+                  stroke={colors[t].text === '#141414' ? 'rgba(255,255,255,0.35)' : 'rgba(20,20,20,0.45)'}
+                  strokeWidth="3"
+                  paintOrder="stroke"
                   style={{ pointerEvents: 'none' }}
                 >
                   {formatPrize(multFor(t)).replace('×', '')}

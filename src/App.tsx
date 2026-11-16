@@ -1008,24 +1008,26 @@ export default function App() {
 
   return (
     <div className="app">
-      {demo && !CLEAN_MODE && (
-        <div className="overlay-badge" title="Free-play demo · the real game runs inside chain.wtf with your vault balance">
-          <span className="tick-dot" />
-          DEMO TICKET · FREE PLAY
-        </div>
-      )}
+      <span className="sr-only" role="status">{lcd}</span>
 
       <header className="top">
         <div className="brand">
           <div className="brand-mark"><WheelBadge /></div>
           <div>
             <div className="brand-name">FAIRGROUND</div>
-            <div className="brand-sub">the honest carnival</div>
+            <div
+              className={`brand-sub${demo && !CLEAN_MODE ? ' demo' : ''}`}
+              title={demo ? 'Free-play demo · the real game runs inside chain.wtf with your vault balance' : undefined}
+            >
+              {demo && !CLEAN_MODE ? 'Free play · demo' : 'the honest carnival'}
+            </div>
           </div>
         </div>
         <div className="chips">
-          <div className="chip lcd"><span className="lbl">LCD</span><span>{lcd}</span></div>
-          <div className="chip"><span className="lbl">Bank</span>{formatUnits(rawBalance, decimals)} {symbol}</div>
+          <div className="chip balance" aria-label="balance">
+            <span className="coin-dot" aria-hidden="true" />
+            {formatUnits(rawBalance, decimals)} <span className="lbl">{symbol}</span>
+          </div>
           <button className="icon-btn" onClick={() => { sfx.click(); setHowOpen(true); }} aria-label="how to play" title="How to play">
             ?
           </button>
@@ -1052,9 +1054,11 @@ export default function App() {
           >
             <span className="t-icon" aria-hidden="true">{s.icon}</span>
             <span className="t-label">{s.label}</span>
-            <span className="t-badge">
-              {s.id === 'collect' ? `${shelf.owned}/${shelf.total}` : s.id === 'daily' ? `${doneToday}/3` : 'READY'}
-            </span>
+            {s.id !== 'play' && (
+              <span className="t-badge">
+                {s.id === 'collect' ? `${shelf.owned}/${shelf.total}` : `${doneToday}/3`}
+              </span>
+            )}
           </button>
         ))}
       </nav>
@@ -1070,7 +1074,36 @@ export default function App() {
         <section className={`panel${paintNote ? ' nope' : ''}`}>
           <div className="panel-title">
             <h2>You paint the prizes</h2>
-            <span className="hint">tap a slice · then SPIN · {paint.segmentCount} slices</span>
+            <span className="paint-tools">
+              <button type="button" className="tool-btn" disabled={!!round} onClick={cycleSegmentCount} title="change the number of slices">
+                {paint.segmentCount} slices
+              </button>
+              <button type="button" className="tool-btn" disabled={!!round} onClick={autoRepaint} title="random legal paint" aria-label="random legal paint">
+                🎲 Shuffle
+              </button>
+              <button type="button" className="tool-btn" onClick={shareWheel} title="copy a link to this wheel">
+                {copied ? 'Copied ✓' : 'Share'}
+              </button>
+            </span>
+          </div>
+
+          {/* Fast starts: a legal, meaningful paint in one tap, so nobody has
+              to learn a rule before they can play well. */}
+          <div className="paint-presets" role="group" aria-label="ready-made paints">
+            <span className="pp-label">Stake shape</span>
+            {PAINT_PRESETS.map(p => (
+              <button
+                key={p.id}
+                type="button"
+                title={p.hint}
+                disabled={!!round}
+                className={`preset${activePreset === p.id ? ' on' : ''}`}
+                onClick={() => applyPreset(p.id)}
+              >
+                {p.label}
+              </button>
+            ))}
+            <span className="pp-state">{activePreset ? '' : 'custom'}</span>
           </div>
 
           <Wheel
@@ -1098,25 +1131,6 @@ export default function App() {
                 <span className="mult">{formatPrize(t === 0 ? prices.safe : t === 1 ? prices.mid : prices.risky)}</span>
               </button>
             ))}
-          </div>
-
-          {/* Fast starts: a legal, meaningful paint in one tap, so nobody has
-              to learn a rule before they can play well. */}
-          <div className="paint-presets" role="group" aria-label="ready-made paints">
-            <span className="pp-label">Stake shape</span>
-            {PAINT_PRESETS.map(p => (
-              <button
-                key={p.id}
-                type="button"
-                title={p.hint}
-                disabled={!!round}
-                className={`preset${activePreset === p.id ? ' on' : ''}`}
-                onClick={() => applyPreset(p.id)}
-              >
-                {p.label}
-              </button>
-            ))}
-            <span className="pp-state">{activePreset ? '' : 'custom'}</span>
           </div>
 
           {/* The trade, made visible: as risky takes more of the wheel, each
@@ -1208,7 +1222,6 @@ export default function App() {
                   : choice === 'ride' ? '◆ FAIR COIN' : choice === 'bank' ? '◆ BANKING' : '● SPINNING'
                 : result ? (result.won ? `▲ ${formatExact(result.payout, decimals)} ${symbol}` : '▼ NO WIN') : '■ PLACE YOUR BET'}
             </div>
-            <button className="icon-btn" style={{ boxShadow: 'none', background: '#2a2d2b', borderColor: '#2a2d2b', color: '#7dffb2' }} onClick={autoRepaint} title="random legal paint">🎲</button>
           </div>
 
           {/* the last few spins beside the LCD: the table readout a player
@@ -1236,23 +1249,10 @@ export default function App() {
                 <span className="unit">{symbol}</span>
               </div>
               <button className="half-double" onClick={() => { sfx.click(); setBetInput(v => { const d = parseUnits(v, decimals) * 2n; return formatUnits(d > maxWager ? maxWager : d, decimals); }); }}>2×</button>
+              <button className="half-double max" disabled={!!round || maxWager <= 0n} onClick={() => { sfx.click(); setBetInput(formatUnits(maxWager, decimals)); }}>MAX</button>
             </div>
             <div className="bet-meta">
               <span>{wagerPreview ?? `max ${formatUnits(maxWager, decimals)}`}</span>
-              <button
-                className="mini-link"
-                style={{ border: 'none', background: 'none', color: 'var(--blue-deep)', fontWeight: 900, cursor: 'pointer', fontSize: 11 }}
-                onClick={shareWheel}
-              >
-                {copied ? 'LINK COPIED ✓' : 'COPY WHEEL LINK'}
-              </button>
-              <button
-                className="mini-link"
-                style={{ border: 'none', background: 'none', color: 'var(--blue-deep)', fontWeight: 900, cursor: 'pointer', fontSize: 11 }}
-                onClick={cycleSegmentCount}
-              >
-                {paint.segmentCount} slices
-              </button>
             </div>
           </div>
 
