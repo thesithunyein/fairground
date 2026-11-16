@@ -1739,3 +1739,189 @@ body { background: var(--paper); }
 /* the amount field gives way first, so ½ / 2× / MAX never leave the card */
 .bet-input-wrap { flex: 1 1 0; min-width: 72px; }
 .bet-input-wrap input { width: 100%; }
+
+/* ══ arcade-sky skin ════════════════════════════════════════════════════
+   A bright sky behind the table, the wheel sitting straight on it with no
+   box, milky-glass cards and chunky white-rimmed pill buttons. */
+:root {
+  --paper: #e4f3ff;
+  --paper-2: #d2e9ff;
+  --ink: #163f9e;
+  --ink-soft: rgba(22, 63, 158, 0.72);
+  --ink-faint: rgba(22, 63, 158, 0.42);
+  --line: rgba(22, 63, 158, 0.12);
+  --card: #ffffff;
+  --blue: #2f80ff;
+  --blue-deep: #1b5fe0;
+  --red: #ff4f7b;
+  --red-deep: #dd2c5c;
+  --gold: #ffc21a;
+  --green: #22c93a;
+  --paper-red: #ffe1ea;
+  --paper-gold: #fff2c4;
+  --paper-green: #dcf9e0;
+  --paper-blue: #dcebff;
+  --sky: linear-gradient(180deg, #a6f09a 0%, #56dccf 26%, #2eaaf7 60%, #2f6cf0 100%);
+  --glass: rgba(255, 255, 255, 0.84);
+  --on-sky: #ffffff;
+  --shadow-card: 0 16px 40px rgba(16, 52, 140, 0.26);
+  --shadow-soft: 0 4px 0 rgba(16, 52, 140, 0.16), 0 8px 18px rgba(16, 52, 140, 0.14);
+  --radius: 28px;
+}
+:root[data-theme='dark'] {
+  --paper: #22347f;
+  --paper-2: #2b3f95;
+  --ink: #eef4ff;
+  --ink-soft: rgba(238, 244, 255, 0.74);
+  --ink-faint: rgba(238, 244, 255, 0.42);
+  --line: rgba(238, 244, 255, 0.14);
+  --card: #1a2a6c;
+  --blue-deep: #9cc0ff;
+  --paper-red: #4a2350;
+  --paper-gold: #45401f;
+  --paper-green: #17483a;
+  --paper-blue: #263c94;
+  --sky: linear-gradient(180deg, #123a6e 0%, #14308a 40%, #101c5c 100%);
+  --glass: rgba(22, 36, 98, 0.86);
+  --shadow-card: 0 16px 40px rgba(0, 0, 0, 0.4);
+  --shadow-soft: 0 4px 0 rgba(0, 0, 0, 0.25), 0 8px 18px rgba(0, 0, 0, 0.25);
+}
+html { background: #2f6cf0; }
+body { background: var(--sky) fixed; }
+
+/* header sits on the sky */
+.brand-mark { border: 3px solid #fff; border-radius: 14px; }
+.brand-name {
+  font-family: var(--font-ui);
+  font-weight: 1000; font-size: 22px; letter-spacing: 0.03em;
+  color: var(--on-sky);
+  text-shadow: 0 2px 0 rgba(16, 52, 140, 0.35);
+}
+.brand-sub { color: rgba(255, 255, 255, 0.92); }
+.brand-sub.demo { background: #ffd23c; color: #6b3d00; font-weight: 900; }
+.chip, .icon-btn { background: #fff; color: #163f9e; border: 0; box-shadow: var(--shadow-soft); }
+.chip.balance { font-weight: 900; padding: 8px 14px; }
+.coin-dot { background: radial-gradient(circle at 35% 30%, #ffe680, #ffb300); width: 16px; height: 16px; }
+
+/* switcher: a glass pill, the active screen is a white tablet */
+.tabnav { background: rgba(255, 255, 255, 0.28); border: 2px solid rgba(255, 255, 255, 0.7); box-shadow: none; padding: 5px; backdrop-filter: blur(8px); }
+.tab { color: #fff; font-weight: 900; }
+.tab:not(.on):hover { background: rgba(255, 255, 255, 0.2); color: #fff; }
+.tab .t-badge { background: rgba(255, 255, 255, 0.3); color: #fff; }
+.tab.on { background: #fff; color: #163f9e; box-shadow: 0 3px 0 rgba(16, 52, 140, 0.18); }
+.tab.on .t-badge { background: var(--paper-blue); color: #163f9e; }
+
+/* glass cards */
+.panel {
+  background: var(--glass);
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+}
+:root[data-theme='dark'] .panel { border-color: rgba(255, 255, 255, 0.16); }
+
+/* the wheel wears no box: it sits on the sky with a ray burst behind it */
+.stage > .panel:first-child { background: none; border: 0; box-shadow: none; backdrop-filter: none; padding: 4px 0 0; }
+.stage > .panel:first-child .panel-title h2 { color: var(--on-sky); font-size: 20px; font-weight: 1000; text-shadow: 0 2px 0 rgba(16, 52, 140, 0.3); }
+.wheel-wrap { padding: 14px 0 10px; }
+.wheel-wrap::before {
+  content: '';
+  position: absolute; left: 50%; top: 50%;
+  width: min(150%, 660px); aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: repeating-conic-gradient(rgba(255, 255, 255, 0.16) 0 9deg, transparent 9deg 18deg);
+  -webkit-mask-image: radial-gradient(circle, #000 28%, transparent 68%);
+  mask-image: radial-gradient(circle, #000 28%, transparent 68%);
+  pointer-events: none;
+}
+.wheel-svg { position: relative; z-index: 1; filter: drop-shadow(0 12px 0 rgba(16, 52, 140, 0.18)) drop-shadow(0 22px 26px rgba(16, 52, 140, 0.3)); }
+.wedge-flash { z-index: 2; }
+.pointer { top: 2px; filter: drop-shadow(0 3px 0 rgba(16, 52, 140, 0.3)); }
+
+/* pills on the sky */
+.tool-btn, .preset { background: #fff; color: #163f9e; box-shadow: 0 3px 0 rgba(16, 52, 140, 0.16); font-weight: 900; }
+.tool-btn:hover:not(:disabled) { background: #f0f8ff; }
+.preset.on { background: linear-gradient(180deg, #ffe066, #ffb300); color: #6b3d00; }
+.tier-pill {
+  background: #fff; color: #163f9e;
+  border: 3px solid #fff; border-radius: 999px;
+  box-shadow: 0 4px 0 rgba(16, 52, 140, 0.16);
+  padding: 9px 14px; font-weight: 900;
+}
+.tier-pill.safe, .tier-pill.mid, .tier-pill.risky { background: #fff; }
+.tier-pill .dot { flex-basis: 14px; width: 14px; height: 14px; }
+.tier-pill.selected { border-color: #fff; color: #fff; transform: translateY(-2px); }
+.tier-pill.safe.selected { background: linear-gradient(180deg, #5fe86f, #1fbf36); }
+.tier-pill.mid.selected { background: linear-gradient(180deg, #ffd95a, #ffb300); color: #6b3d00; }
+.tier-pill.risky.selected { background: linear-gradient(180deg, #ff7d9c, #ff3f6e); }
+.tier-pill.selected .dot { background: #fff; }
+.fair-deets summary { color: var(--on-sky); }
+.fair-deets[open] { background: var(--glass); border-radius: 22px; padding: 4px 14px 12px; }
+.fair-deets[open] summary { color: var(--ink); }
+.paint-note { border: 0; border-radius: 16px; background: #fff; color: #dd2c5c; text-align: center; }
+
+/* bet card */
+.bet-block { padding: 14px; border-radius: 30px; }
+.bet-input-wrap, .half-double { border-radius: 999px; }
+.half-double { background: #fff; color: #163f9e; box-shadow: 0 3px 0 rgba(16, 52, 140, 0.14); }
+:root[data-theme='dark'] .half-double, :root[data-theme='dark'] .tool-btn, :root[data-theme='dark'] .preset,
+:root[data-theme='dark'] .tier-pill, :root[data-theme='dark'] .chip, :root[data-theme='dark'] .icon-btn { background: #eef4ff; }
+
+/* SPIN: a glossy green pill with a white rim */
+.spin-btn {
+  position: relative;
+  border: 4px solid #fff;
+  border-radius: 999px;
+  padding: 16px 18px;
+  font-size: 24px; font-weight: 1000; letter-spacing: 0.1em;
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(8, 110, 20, 0.5);
+  background: linear-gradient(180deg, #7df05a 0%, #2fd43a 48%, #12b524 100%);
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.45), 0 6px 0 #0c8f1b, 0 16px 30px rgba(8, 110, 20, 0.35);
+}
+.spin-btn:hover { background: linear-gradient(180deg, #8df66c 0%, #3adb45 48%, #16bd29 100%); }
+.spin-btn:not(:disabled):active { transform: translateY(4px); box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.45), 0 2px 0 #0c8f1b, 0 6px 14px rgba(8, 110, 20, 0.3); }
+.spin-btn:disabled { background: rgba(255, 255, 255, 0.35); color: #fff; text-shadow: none; border-color: rgba(255, 255, 255, 0.6); box-shadow: none; }
+.spin-btn:not(:disabled)::before, .spin-btn:not(:disabled)::after {
+  content: '✦'; position: absolute; color: #fff; text-shadow: none; pointer-events: none;
+}
+.spin-btn:not(:disabled)::before { left: 22px; top: 50%; transform: translateY(-50%); font-size: 20px; }
+.spin-btn:not(:disabled)::after { right: 24px; top: 50%; transform: translateY(-50%); font-size: 14px; }
+@keyframes attract {
+  0%, 100% { box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.45), 0 6px 0 #0c8f1b, 0 16px 30px rgba(8, 110, 20, 0.35); }
+  50% { box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.45), 0 6px 0 #0c8f1b, 0 16px 30px rgba(8, 110, 20, 0.35), 0 0 0 9px rgba(255, 255, 255, 0.28); }
+}
+
+/* text that sits on the sky */
+.coach, .coach b, .fair-note, .bet-meta + .x { color: var(--on-sky); }
+.coach { text-shadow: 0 1px 0 rgba(16, 52, 140, 0.25); }
+.fair-note { color: rgba(255, 255, 255, 0.9); }
+.result-banner { border-radius: 999px; border: 3px solid #fff; box-shadow: var(--shadow-soft); }
+.result-banner.win { background: #fff; color: #12a326; border: 3px solid #fff; }
+.result-banner.lose { background: rgba(255, 255, 255, 0.9); color: #163f9e; border: 3px solid #fff; }
+.day-nudge { background: #fff; color: #163f9e; border-radius: 999px; }
+.wallet-note { border-radius: 18px; }
+.r-chip { box-shadow: 0 2px 0 rgba(16, 52, 140, 0.14); }
+
+/* keep or double */
+.ride-overlay { background: rgba(14, 40, 120, 0.55); }
+.ride-sheet { background: #fff; color: #163f9e; border: 4px solid #fff; border-radius: 32px; }
+:root[data-theme='dark'] .ride-sheet { --ink: #163f9e; --ink-soft: rgba(22, 63, 158, 0.72); --paper: #e4f3ff; }
+.rd-btns button { border-radius: 999px; }
+.rd-bank { background: var(--paper); color: #163f9e; box-shadow: 0 4px 0 rgba(16, 52, 140, 0.16); }
+.rd-ride { background: linear-gradient(180deg, #7df05a, #12b524); box-shadow: 0 5px 0 #0c8f1b; text-shadow: 0 1px 0 rgba(8, 110, 20, 0.45); }
+.rd-ride:hover:not(:disabled) { background: linear-gradient(180deg, #8df66c, #16bd29); }
+.howto { background: #fff; }
+
+@media (max-width: 660px) {
+  .brand-name { font-size: 17px; }
+  .tabnav { background: rgba(255, 255, 255, 0.94); border: 0; backdrop-filter: none; box-shadow: 0 -6px 20px rgba(16, 52, 140, 0.2); border-radius: 24px 24px 0 0; }
+  .tab { color: rgba(22, 63, 158, 0.6); }
+  .tab .t-badge { background: var(--paper-blue); color: #163f9e; }
+  .tab:not(.on):hover { background: none; color: rgba(22, 63, 158, 0.6); }
+  .tab.on { background: var(--paper-blue); color: #163f9e; box-shadow: none; }
+  .stage > .panel:first-child { padding: 2px 2px 0; }
+  .stage > .panel:first-child .panel-title h2 { font-size: 18px; }
+  .spin-btn { border-radius: 999px; font-size: 22px; padding: 14px 18px; box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.45), 0 5px 0 #0c8f1b, 0 12px 24px rgba(8, 80, 20, 0.4); }
+  .tier-pill { padding: 8px 9px; }
+}

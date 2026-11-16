@@ -3,7 +3,7 @@ import { wheelPrizes, formatPrize, type Paint, type Tier } from '../lib/game';
 
 const TIER_COLORS: Record<Tier, { fill: string; text: string }> = {
   0: { fill: 'var(--green)', text: '#ffffff' },
-  1: { fill: 'var(--gold)', text: '#141414' },
+  1: { fill: 'var(--gold)', text: '#6b3d00' },
   2: { fill: 'var(--red)', text: '#ffffff' },
 };
 
@@ -183,7 +183,7 @@ export function Wheel({
     <div className={`wheel-wrap${phase === 'done' ? ` spun-shake${heavyShake ? ' heavy' : ''}` : ''}`}>
       <svg className="wheel-svg" viewBox="0 0 400 400" aria-label="FAIRGROUND prize wheel">
         {/* outer rim */}
-        <circle cx={cx} cy={cy} r={R + rim / 2} fill="#ffffff" />
+        <circle cx={cx} cy={cy} r={R + rim / 2 + 3} fill="#bfe8ff" stroke="#ffffff" strokeWidth="5" />
         {/* fixed ink ring: the wheel is artwork, so this must not follow the
             host theme the way the page chrome does */}
         <circle cx={cx} cy={cy} r={R + rim / 2 - 7} fill="none" stroke="rgba(20, 20, 20, 0.14)" strokeWidth="2" />
@@ -209,7 +209,7 @@ export function Wheel({
                   textAnchor="middle"
                   dominantBaseline="middle"
                   transform={`rotate(${(-rotation).toFixed(2)} ${pos.x.toFixed(2)} ${pos.y.toFixed(2)})`}
-                  stroke={colors[t].text === '#141414' ? 'rgba(255,255,255,0.3)' : 'rgba(39,32,72,0.22)'}
+                  stroke={colors[t].text === '#ffffff' ? 'rgba(16,52,140,0.28)' : 'rgba(255,255,255,0.4)'}
                   strokeWidth="2.5"
                   paintOrder="stroke"
                   style={{ pointerEvents: 'none' }}
@@ -230,8 +230,8 @@ export function Wheel({
                 key={`peg-${i}`}
                 cx={Number((cx + rr * Math.cos(a)).toFixed(2))}
                 cy={Number((cy + rr * Math.sin(a)).toFixed(2))}
-                r="3"
-                fill="#d9d5f5"
+                r="3.2"
+                fill="#ffffff"
               />
             );
           })}
@@ -240,6 +240,18 @@ export function Wheel({
           <circle cx={cx} cy={cy} r="32" fill="#ffffff" />
           <circle cx={cx} cy={cy} r="11" fill={colors[2].fill} />
         </g>
+
+        {/* fixed gloss: the light stays put while the wheel turns under it */}
+        <defs>
+          <radialGradient id="fg-gloss" cx="32%" cy="24%" r="75%">
+            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.42" />
+            <stop offset="45%" stopColor="#ffffff" stopOpacity="0.06" />
+            <stop offset="100%" stopColor="#0a2a7a" stopOpacity="0.1" />
+          </radialGradient>
+        </defs>
+        <circle cx={cx} cy={cy} r={R} fill="url(#fg-gloss)" style={{ pointerEvents: 'none' }} />
+        <circle cx={cx} cy={cy} r="30" fill="#ffffff" style={{ pointerEvents: 'none' }} />
+        <circle cx={cx} cy={cy} r="13" fill="#22c93a" style={{ pointerEvents: 'none' }} />
 
         {/* static pointer hub cap */}
         <circle cx={cx} cy={cy} r="4" fill="#ffffff" />
@@ -258,7 +270,7 @@ export function Wheel({
         width="44" height="30" viewBox="0 0 44 30" aria-hidden
         style={{ transform: `translateX(-50%) rotate(${pointerKick.toFixed(2)}deg)`, transformOrigin: '50% 100%' }}
       >
-        <path d="M22 28 L4 4 Q22 10 40 4 Z" fill="#272048" stroke="#ffffff" strokeWidth="3" strokeLinejoin="round" />
+        <path d="M22 28 L4 4 Q22 10 40 4 Z" fill="#ffb300" stroke="#ffffff" strokeWidth="3.5" strokeLinejoin="round" />
       </svg>
     </div>
   );
