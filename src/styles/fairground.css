@@ -1735,3 +1735,7 @@ body { background: var(--paper); }
   .brand-sub.demo { font-size: 10px; padding: 1px 7px; }
   .paint-tools { width: 100%; }
 }
+
+/* the amount field gives way first, so ½ / 2× / MAX never leave the card */
+.bet-input-wrap { flex: 1 1 0; min-width: 72px; }
+.bet-input-wrap input { width: 100%; }

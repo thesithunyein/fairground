@@ -1477,11 +1477,11 @@ export default function App() {
                 <div className="rd-btns">
                   <button type="button" className="rd-bank" disabled={rideBusy} onClick={() => void chooseAction('bank')}>
                     KEEP IT
-                    <small>{formatUnits(decision.cashOut, decimals)} {symbol}</small>
+                    <small>{formatExact(decision.cashOut, decimals)} {symbol}</small>
                   </button>
                   <button type="button" className="rd-ride" disabled={rideBusy} onClick={() => void chooseAction('ride')}>
                     DOUBLE
-                    <small>50/50 for {formatUnits(decision.cashOut * 2n, decimals)}</small>
+                    <small>50/50 for {formatExact(decision.cashOut * 2n, decimals)}</small>
                   </button>
                 </div>
               </>
