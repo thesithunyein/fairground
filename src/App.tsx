@@ -1079,7 +1079,7 @@ export default function App() {
                 {paint.segmentCount} slices
               </button>
               <button type="button" className="tool-btn" disabled={!!round} onClick={autoRepaint} title="random legal paint" aria-label="random legal paint">
-                🎲 Shuffle
+                🎲<span className="tl"> Shuffle</span>
               </button>
               <button type="button" className="tool-btn" onClick={shareWheel} title="copy a link to this wheel">
                 {copied ? 'Copied ✓' : 'Share'}

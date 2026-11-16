@@ -1558,3 +1558,20 @@ html, body { overflow-x: clip; } /* phones: never scroll sideways */
   letter-spacing: 0; text-transform: none;
   opacity: 0.85;
 }
+
+/* the two-column table on a small window (tablet, the 800x600 Chain iframe):
+   tools stay on the title row, the bet row keeps a readable amount, and the
+   wheel leaves room for the tier pills on the same screen */
+.bet-input-wrap { flex: 1 1 auto; min-width: 96px; }
+@media (min-width: 661px) and (max-width: 900px) {
+  .tool-btn .tl { display: none; }
+  .tool-btn { padding: 6px 10px; }
+  .bet-block .row { gap: 6px; }
+  .half-double { width: 42px; }
+  .half-double.max { width: 50px; font-size: 10px; }
+}
+@media (min-width: 661px) and (max-height: 760px) {
+  .wheel-svg { width: min(44vh, 430px); }
+  .paint-presets { margin-bottom: 6px; }
+  .panel-title { margin-bottom: 6px; }
+}
