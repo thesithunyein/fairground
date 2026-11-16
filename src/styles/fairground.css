@@ -1928,3 +1928,8 @@ body { background: var(--sky) fixed; }
 /* the sparkles need a positioned button; on phones and short windows it is already fixed */
 @media (min-width: 661px) and (min-height: 561px) { .spin-btn { position: relative; } }
 @media (max-width: 660px) { .brand-name { font-size: 15px; } .chip.balance { padding: 6px 10px; } }
+
+/* logo: the wheel mark on a sky tile, no red block */
+.brand-mark { width: 40px; height: 40px; background: linear-gradient(180deg, #a6f09a, #2eaaf7); border: 3px solid #fff; border-radius: 14px; }
+.boot { color: #fff; font-weight: 900; }
+@media (max-width: 660px) { .brand-mark { display: grid; width: 34px; height: 34px; border-width: 2px; border-radius: 11px; } .brand-mark svg { width: 22px; height: 22px; } .brand-sub.demo { display: none; } }

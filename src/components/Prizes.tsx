@@ -115,14 +115,36 @@ export function PrizeSprite({ toy, rarity, size = 34 }: { toy: number; rarity: T
   );
 }
 
+const BADGE_COLORS = ['#ff4f7b', '#22c93a', '#ffc21a', '#22c93a', '#ff4f7b', '#22c93a', '#ffc21a', '#22c93a'];
+
+function BadgeWedges({ r, strokeWidth }: { r: number; strokeWidth: number }) {
+  return (
+    <>
+      {BADGE_COLORS.map((fill, i) => {
+        const a0 = ((i * 45 - 90) * Math.PI) / 180;
+        const a1 = (((i + 1) * 45 - 90) * Math.PI) / 180;
+        return (
+          <path
+            key={i}
+            d={`M16 16 L${(16 + r * Math.cos(a0)).toFixed(2)} ${(16 + r * Math.sin(a0)).toFixed(2)} A${r} ${r} 0 0 1 ${(16 + r * Math.cos(a1)).toFixed(2)} ${(16 + r * Math.sin(a1)).toFixed(2)} Z`}
+            fill={fill}
+            stroke="#ffffff"
+            strokeWidth={strokeWidth}
+            strokeLinejoin="round"
+          />
+        );
+      })}
+    </>
+  );
+}
+
 export function WheelBadge() {
   return (
-    <svg width="20" height="20" viewBox="0 0 32 32" aria-hidden>
-      <circle cx="16" cy="16" r="14" fill="#f7f4ec" stroke="#141414" strokeWidth="3" />
-      <path d="M16 16 L16 3 A13 13 0 0 1 27.3 9.5 Z" fill="#e8442e" stroke="#141414" strokeWidth="1.4" />
-      <path d="M16 16 L27.3 9.5 A13 13 0 0 1 27.3 22.5 Z" fill="#f5b301" stroke="#141414" strokeWidth="1.4" />
-      <path d="M16 16 L27.3 22.5 A13 13 0 0 1 16 29 Z" fill="#2f6bff" stroke="#141414" strokeWidth="1.4" />
-      <circle cx="16" cy="16" r="3.4" fill="#141414" />
+    <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden>
+      <circle cx="16" cy="16" r="15" fill="#bfe8ff" stroke="#ffffff" strokeWidth="1.6" />
+      <BadgeWedges r={13} strokeWidth={1.1} />
+      <circle cx="16" cy="16" r="3.4" fill="#ffffff" />
+      <circle cx="16" cy="16" r="1.6" fill="#22c93a" />
     </svg>
   );
 }
@@ -130,17 +152,10 @@ export function WheelBadge() {
 export function BootWheel() {
   return (
     <svg className="wheel-spin" viewBox="0 0 32 32" aria-hidden>
-      <circle cx="16" cy="16" r="14" fill="#f7f4ec" stroke="#141414" strokeWidth="3" />
-      {[0, 60, 120, 180, 240, 300].map(a => (
-        <path
-          key={a}
-          d={`M16 16 L${16 + 12 * Math.cos((a * Math.PI) / 180)} ${16 + 12 * Math.sin((a * Math.PI) / 180)} A12 12 0 0 1 ${16 + 12 * Math.cos(((a + 30) * Math.PI) / 180)} ${16 + 12 * Math.sin(((a + 30) * Math.PI) / 180)} Z`}
-          fill={['#e8442e', '#f5b301', '#2f6bff'][a / 60 % 3]}
-          stroke="#141414"
-          strokeWidth="1"
-        />
-      ))}
-      <circle cx="16" cy="16" r="3.4" fill="#141414" />
+      <circle cx="16" cy="16" r="15" fill="#bfe8ff" stroke="#ffffff" strokeWidth="1.6" />
+      <BadgeWedges r={13} strokeWidth={0.9} />
+      <circle cx="16" cy="16" r="3.4" fill="#ffffff" />
+      <circle cx="16" cy="16" r="1.6" fill="#22c93a" />
     </svg>
   );
 }

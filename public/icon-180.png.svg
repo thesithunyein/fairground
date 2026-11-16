@@ -1,11 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
-  <!-- FAIRGROUND brand mark: round-cornered tile + prize wheel -->
-  <rect x="6" y="6" width="168" height="168" rx="46" fill="#e8442e" stroke="#141414" stroke-width="10"/>
-  <circle cx="90" cy="90" r="60" fill="#f7f4ec" stroke="#141414" stroke-width="8"/>
-  <!-- wedges: safe (cream) / mid (gold) / risky (blue) on the red tile -->
-  <path d="M90 90 L90 32 A58 58 0 0 1 138 59 Z" fill="#f7f4ec" stroke="#141414" stroke-width="5"/>
-  <path d="M90 90 L138 59 A58 58 0 0 1 138 121 Z" fill="#f5b301" stroke="#141414" stroke-width="5"/>
-  <path d="M90 90 L138 121 A58 58 0 0 1 90 148 Z" fill="#2f6bff" stroke="#141414" stroke-width="5"/>
-  <circle cx="90" cy="90" r="15" fill="#141414"/>
-  <circle cx="90" cy="90" r="5" fill="#e8442e"/>
+  <!-- FAIRGROUND brand mark: a sky tile with the prize wheel -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a6f09a"/><stop offset=".3" stop-color="#56dccf"/><stop offset=".65" stop-color="#2eaaf7"/><stop offset="1" stop-color="#2f6cf0"/></linearGradient>
+    <radialGradient id="gloss" cx="32%" cy="24%" r="75%"><stop offset="0" stop-color="#fff" stop-opacity=".42"/><stop offset=".45" stop-color="#fff" stop-opacity=".06"/><stop offset="1" stop-color="#0a2a7a" stop-opacity=".1"/></radialGradient>
+  </defs>
+  <rect width="180" height="180" rx="44" fill="url(#sky)"/>
+  <circle cx="90" cy="98" r="61.6" fill="#bfe8ff" stroke="#fff" stroke-width="5.6"/>
+  <path d="M90 98 L90.00 42.00 A56 56 0 0 1 129.60 58.40 Z" fill="#ff4f7b" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M90 98 L129.60 58.40 A56 56 0 0 1 146.00 98.00 Z" fill="#22c93a" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M90 98 L146.00 98.00 A56 56 0 0 1 129.60 137.60 Z" fill="#ffc21a" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M90 98 L129.60 137.60 A56 56 0 0 1 90.00 154.00 Z" fill="#22c93a" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M90 98 L90.00 154.00 A56 56 0 0 1 50.40 137.60 Z" fill="#ff4f7b" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M90 98 L50.40 137.60 A56 56 0 0 1 34.00 98.00 Z" fill="#22c93a" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M90 98 L34.00 98.00 A56 56 0 0 1 50.40 58.40 Z" fill="#ffc21a" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M90 98 L50.40 58.40 A56 56 0 0 1 90.00 42.00 Z" fill="#22c93a" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="90" cy="98" r="56" fill="url(#gloss)"/>
+  <circle cx="90" cy="98" r="11.2" fill="#fff"/>
+  <circle cx="90" cy="98" r="5.0" fill="#22c93a"/>
+  <path d="M90 49.8 L78.8 26.3 Q90 31.9 101.2 26.3 Z" fill="#ffb300" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M150 23 Q150 34 161 34 Q150 34 150 45 Q150 34 139 34 Q150 34 150 23 Z" fill="#fff"/>
+  <path d="M30 143 Q30 150 37 150 Q30 150 30 157 Q30 150 23 150 Q30 150 30 143 Z" fill="#fff"/>
 </svg>
