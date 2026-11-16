@@ -1548,3 +1548,13 @@ html, body { overflow-x: clip; } /* phones: never scroll sideways */
   .tier-pill { padding: 9px 7px; gap: 4px; font-size: 12.5px; min-width: 0; }
   .tier-pill .mult { font-size: 11px; margin-left: auto; }
 }
+
+/* keep or double: each button says what it is worth */
+.rd-btns button small {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-ui);
+  font-size: 11.5px; font-weight: 800;
+  letter-spacing: 0; text-transform: none;
+  opacity: 0.85;
+}
