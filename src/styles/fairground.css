@@ -1869,7 +1869,6 @@ body { background: var(--sky) fixed; }
 
 /* SPIN: a glossy green pill with a white rim */
 .spin-btn {
-  position: relative;
   border: 4px solid #fff;
   border-radius: 999px;
   padding: 16px 18px;
@@ -1925,3 +1924,7 @@ body { background: var(--sky) fixed; }
   .spin-btn { border-radius: 999px; font-size: 22px; padding: 14px 18px; box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.45), 0 5px 0 #0c8f1b, 0 12px 24px rgba(8, 80, 20, 0.4); }
   .tier-pill { padding: 8px 9px; }
 }
+
+/* the sparkles need a positioned button; on phones and short windows it is already fixed */
+@media (min-width: 661px) and (min-height: 561px) { .spin-btn { position: relative; } }
+@media (max-width: 660px) { .brand-name { font-size: 15px; } .chip.balance { padding: 6px 10px; } }
